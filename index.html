@@ -314,6 +314,23 @@ body {
 }
 
 /* ───────────── Animations ───────────── */
+@keyframes sweepRight {
+  0%   { transform: translateX(-100%); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translateX(100%);  opacity: 0; }
+}
+.swipe-sweep {
+  position: fixed; inset: 0;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(100,180,255,0.10) 35%,
+    rgba(140,200,255,0.22) 50%,
+    rgba(100,180,255,0.10) 65%,
+    transparent 100%);
+  animation: sweepRight 420ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+  z-index: 200;
+}
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1227,8 +1244,9 @@ window.Transcript = Transcript;
 <script type="text/babel">
 function GestureController() {
   const [cursor, setCursor] = React.useState({ x: -300, y: -300, pinching: false });
-  const stateRef = React.useRef({ pinching: false, cooldown: false });
-  const smooth = React.useRef({ x: -300, y: -300 });
+  const stateRef = React.useRef({ pinching: false, cooldown: false, swipeCooldown: false });
+  const smooth   = React.useRef({ x: -300, y: -300 });
+  const posHist  = React.useRef([]);
 
   React.useEffect(() => {
     if (typeof Hands === 'undefined' || typeof Camera === 'undefined') return;
@@ -1279,6 +1297,21 @@ function GestureController() {
 
       stateRef.current.pinching = isPinching;
       setCursor({ x, y, pinching: isPinching });
+
+      // 스와이프 감지: 최근 12프레임 내 200px 이상 우측 이동
+      const hist = posHist.current;
+      hist.push({ x, t: Date.now() });
+      if (hist.length > 15) hist.shift();
+      if (hist.length >= 8 && !stateRef.current.swipeCooldown) {
+        const prev = hist[hist.length - 8];
+        const dx = x - prev.x;
+        const dt = Date.now() - prev.t;
+        if (dx > 180 && dt < 450) {
+          stateRef.current.swipeCooldown = true;
+          window.dispatchEvent(new CustomEvent('gestureswipe', { detail: { dir: 'right' } }));
+          setTimeout(() => { stateRef.current.swipeCooldown = false; }, 1200);
+        }
+      }
     });
 
     const camera = new Camera(videoEl, {
@@ -1459,6 +1492,7 @@ function App() {
   const [phase, setPhase] = useAppState("analyzing");
   const [showCeremony, setShowCeremony] = useAppState(false);
   const [started, setStarted] = useAppState(false);
+  const [sweeping, setSweeping] = useAppState(false);
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const videoRef = useRef(null);
 
@@ -1473,7 +1507,16 @@ function App() {
     }
   }, [started]);
 
-  const start = () => { setPhase("propose"); setShowCeremony(true); };
+  const sweep = (fn) => {
+    setSweeping(false);
+    requestAnimationFrame(() => {
+      setSweeping(true);
+      setTimeout(() => setSweeping(false), 450);
+      fn();
+    });
+  };
+
+  const start   = () => { setPhase("propose"); setShowCeremony(true); };
   const advance = () => {
     setPhase((p) => {
       if (p === "propose") return "awaiting";
@@ -1486,6 +1529,20 @@ function App() {
       return p;
     });
   };
+
+  // 우측 스와이프 → 다음 상태로 전환
+  useAppEffect(() => {
+    const onSwipe = (e) => {
+      if (e.detail.dir !== 'right') return;
+      sweep(() => {
+        if (phase === "analyzing") start();
+        else if (phase === "blank") reset();
+        else advance();
+      });
+    };
+    window.addEventListener('gestureswipe', onSwipe);
+    return () => window.removeEventListener('gestureswipe', onSwipe);
+  }, [phase]);
   const cancel = () => { setShowCeremony(false); setPhase("analyzing"); };
   const reset = () => { setShowCeremony(false); setPhase("analyzing"); };
 
@@ -1610,6 +1667,7 @@ function App() {
         <Ceremony phase={phase} onAdvance={advance} onCancel={cancel} />
       )}
 
+      {sweeping && <div className="swipe-sweep" />}
       <GestureController />
 
       <TweaksPanel title="설정">
