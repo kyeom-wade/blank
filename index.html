@@ -1363,12 +1363,13 @@ function App() {
   const isAnalyzing = (phase === "analyzing") && t.previewAnalysis !== "off";
   const isBlank = phase === "blank" || (phase === "analyzing" && t.previewAnalysis === "off");
 
-  const handleStart = () => {
-    setStarted(true);
-    if (videoRef.current) {
-      videoRef.current.play();
+  const handleStart = () => setStarted(true);
+
+  useAppEffect(() => {
+    if (started && videoRef.current) {
+      videoRef.current.play().catch(() => {});
     }
-  };
+  }, [started]);
 
   const start = () => { setPhase("propose"); setShowCeremony(true); };
   const advance = () => {
