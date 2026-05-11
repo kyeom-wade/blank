@@ -458,6 +458,8 @@ body {
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 
 <!-- tweaks-panel -->
 <script type="text/babel">
@@ -1221,6 +1223,99 @@ window.TruthPanel = TruthPanel;
 window.Transcript = Transcript;
 </script>
 
+<!-- gesture-controller -->
+<script type="text/babel">
+function GestureController() {
+  const [cursor, setCursor] = React.useState({ x: -300, y: -300, pinching: false });
+  const stateRef = React.useRef({ pinching: false, cooldown: false });
+
+  React.useEffect(() => {
+    if (typeof Hands === 'undefined' || typeof Camera === 'undefined') return;
+
+    const videoEl = document.createElement('video');
+    videoEl.setAttribute('playsinline', '');
+
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+    });
+
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.5,
+    });
+
+    hands.onResults((results) => {
+      if (!results.multiHandLandmarks?.length) {
+        setCursor(c => ({ ...c, x: -300, y: -300 }));
+        return;
+      }
+
+      const lm = results.multiHandLandmarks[0];
+      const idx   = lm[8]; // 검지 끝
+      const thumb = lm[4]; // 엄지 끝
+
+      // 카메라 미러링 반영
+      const x = (1 - idx.x) * window.innerWidth;
+      const y = idx.y * window.innerHeight;
+
+      const dist = Math.hypot(idx.x - thumb.x, idx.y - thumb.y);
+      const isPinching = dist < 0.07;
+
+      if (isPinching && !stateRef.current.pinching && !stateRef.current.cooldown) {
+        stateRef.current.cooldown = true;
+        const el = document.elementFromPoint(x, y);
+        if (el) el.click();
+        setTimeout(() => { stateRef.current.cooldown = false; }, 800);
+      }
+
+      stateRef.current.pinching = isPinching;
+      setCursor({ x, y, pinching: isPinching });
+    });
+
+    const camera = new Camera(videoEl, {
+      onFrame: async () => { await hands.send({ image: videoEl }); },
+      width: 640,
+      height: 480,
+    });
+
+    camera.start().catch(console.error);
+    return () => { try { camera.stop(); } catch(e) {} };
+  }, []);
+
+  const visible = cursor.x > 0;
+  return (
+    <div style={{
+      position: 'fixed',
+      left: cursor.x,
+      top: cursor.y,
+      width: cursor.pinching ? 18 : 30,
+      height: cursor.pinching ? 18 : 30,
+      borderRadius: '50%',
+      background: cursor.pinching ? 'rgba(100,200,255,0.55)' : 'transparent',
+      border: `1.5px solid rgba(180,220,255,${visible ? 0.8 : 0})`,
+      transform: 'translate(-50%, -50%)',
+      pointerEvents: 'none',
+      zIndex: 9999,
+      transition: 'width 80ms, height 80ms, background 80ms',
+      boxShadow: cursor.pinching ? '0 0 20px rgba(100,200,255,0.5)' : 'none',
+    }}>
+      {!cursor.pinching && visible && (
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%',
+          width: 4, height: 4, borderRadius: '50%',
+          background: 'rgba(180,220,255,0.8)',
+          transform: 'translate(-50%, -50%)',
+        }} />
+      )}
+    </div>
+  );
+}
+
+window.GestureController = GestureController;
+</script>
+
 <!-- ceremony -->
 <script type="text/babel">
 const { useState: useStateC, useEffect: useEffectC } = React;
@@ -1507,6 +1602,8 @@ function App() {
       {showCeremony && (
         <Ceremony phase={phase} onAdvance={advance} onCancel={cancel} />
       )}
+
+      <GestureController />
 
       <TweaksPanel title="설정">
         <TweakSection label="분석 상태 미리보기">
