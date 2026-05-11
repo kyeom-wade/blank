@@ -1223,99 +1223,6 @@ window.TruthPanel = TruthPanel;
 window.Transcript = Transcript;
 </script>
 
-<!-- face-camera -->
-<script type="text/babel">
-function FaceCamera() {
-  const videoRef = React.useRef(null);
-  const [ready, setReady] = React.useState(false);
-
-  React.useEffect(() => {
-    navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
-    })
-    .then(stream => {
-      if (!videoRef.current) return;
-      videoRef.current.srcObject = stream;
-      setReady(true);
-    })
-    .catch(() => {});
-
-    return () => {
-      if (videoRef.current?.srcObject)
-        videoRef.current.srcObject.getTracks().forEach(t => t.stop());
-    };
-  }, []);
-
-  // 500 × 195 좌표 공간
-  const W = 500, H = 195;
-  const lW = 210, lH = 145, lRx = 34;
-  const lY = 25, lLx = 5, lRx2 = 285;
-  const bridgeY = lY + lH * 0.28;
-  const armY    = lY + lH * 0.44;
-
-  return (
-    <div style={{
-      position: 'absolute', left: '50%', top: '44%',
-      transform: 'translate(-50%, -50%)',
-      width: W, height: H,
-      zIndex: 14,
-      opacity: ready ? 1 : 0,
-      transition: 'opacity 900ms ease',
-    }}>
-      {/* clipPath 정의 */}
-      <svg width="0" height="0" style={{ position: 'absolute' }}>
-        <defs>
-          <clipPath id="face-glasses" clipPathUnits="userSpaceOnUse">
-            <rect x={lLx}  y={lY} width={lW} height={lH} rx={lRx} />
-            <rect x={lRx2} y={lY} width={lW} height={lH} rx={lRx} />
-          </clipPath>
-        </defs>
-      </svg>
-
-      {/* 카메라 피드 — 안경 모양으로 클리핑 */}
-      <video ref={videoRef} autoPlay muted playsInline style={{
-        position: 'absolute', width: W, height: H,
-        objectFit: 'cover', objectPosition: '50% 28%',
-        transform: 'scaleX(-1)',
-        clipPath: 'url(#face-glasses)',
-        filter: 'brightness(0.80) saturate(0.70) contrast(1.05)',
-      }} />
-
-      {/* 렌즈 청색 틴트 */}
-      <svg width={W} height={H} style={{ position:'absolute', inset:0, pointerEvents:'none' }}>
-        <rect x={lLx}  y={lY} width={lW} height={lH} rx={lRx} fill="rgba(0,140,210,0.08)" />
-        <rect x={lRx2} y={lY} width={lW} height={lH} rx={lRx} fill="rgba(0,140,210,0.08)" />
-      </svg>
-
-      {/* 안경 프레임 */}
-      <svg width={W} height={H} style={{ position:'absolute', inset:0, pointerEvents:'none' }}>
-        {/* 렌즈 테두리 */}
-        <rect x={lLx}  y={lY} width={lW} height={lH} rx={lRx}
-          fill="none" stroke="rgba(180,220,255,0.55)" strokeWidth="1.5" />
-        <rect x={lRx2} y={lY} width={lW} height={lH} rx={lRx}
-          fill="none" stroke="rgba(180,220,255,0.55)" strokeWidth="1.5" />
-        {/* 브리지 */}
-        <path
-          d={`M ${lLx+lW},${bridgeY} C ${W/2-14},${lY+4} ${W/2+14},${lY+4} ${lRx2},${bridgeY}`}
-          fill="none" stroke="rgba(180,220,255,0.50)" strokeWidth="1.5"
-        />
-        {/* 템플 (안경다리) */}
-        <line x1={lLx}      y1={armY} x2={0} y2={armY}
-          stroke="rgba(180,220,255,0.28)" strokeWidth="1.5" strokeLinecap="round" />
-        <line x1={lRx2+lW}  y1={armY} x2={W} y2={armY}
-          stroke="rgba(180,220,255,0.28)" strokeWidth="1.5" strokeLinecap="round" />
-        {/* 렌즈 반사 하이라이트 */}
-        <ellipse cx={lLx  + lW*0.27} cy={lY + lH*0.21} rx={lW*0.17} ry={lH*0.11}
-          fill="rgba(255,255,255,0.07)" />
-        <ellipse cx={lRx2 + lW*0.27} cy={lY + lH*0.21} rx={lW*0.17} ry={lH*0.11}
-          fill="rgba(255,255,255,0.07)" />
-      </svg>
-    </div>
-  );
-}
-window.FaceCamera = FaceCamera;
-</script>
-
 <!-- gesture-controller -->
 <script type="text/babel">
 function GestureController() {
@@ -1638,8 +1545,6 @@ function App() {
       </div>
       <div className="floor" />
       <div className="lens-frame" />
-
-      <FaceCamera />
 
       {t.showSubject && <Subject blank={isBlank} />}
       {t.showReticle && !isBlank && <Reticle />}
