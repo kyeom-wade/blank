@@ -1356,10 +1356,19 @@ const TWEAK_DEFAULTS = {
 function App() {
   const [phase, setPhase] = useAppState("analyzing");
   const [showCeremony, setShowCeremony] = useAppState(false);
+  const [started, setStarted] = useAppState(false);
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const videoRef = useRef(null);
 
   const isAnalyzing = (phase === "analyzing") && t.previewAnalysis !== "off";
   const isBlank = phase === "blank" || (phase === "analyzing" && t.previewAnalysis === "off");
+
+  const handleStart = () => {
+    setStarted(true);
+    if (videoRef.current) {
+      videoRef.current.play();
+    }
+  };
 
   const start = () => { setPhase("propose"); setShowCeremony(true); };
   const advance = () => {
@@ -1384,11 +1393,59 @@ function App() {
     }
   }, [phase]);
 
+  if (!started) {
+    return (
+      <div style={{
+        position: "fixed", inset: 0,
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        background: "#04060a",
+        gap: 32,
+      }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{
+            fontFamily: "var(--font-mono, monospace)",
+            fontSize: 11, letterSpacing: "0.28em", textTransform: "uppercase",
+            color: "rgba(180,220,255,0.35)", marginBottom: 16,
+          }}>BLANK · AR GLASSES · 2040</div>
+          <div style={{
+            fontSize: 32, fontWeight: 300, letterSpacing: "-0.02em",
+            color: "rgba(180,220,255,0.75)",
+          }}>시뮬레이션</div>
+        </div>
+        <button onClick={handleStart} style={{
+          fontFamily: "var(--font-sans, sans-serif)",
+          fontSize: 15, fontWeight: 500, letterSpacing: "0.02em",
+          padding: "16px 40px",
+          background: "linear-gradient(180deg, rgba(60,130,220,0.82), rgba(30,90,180,0.78))",
+          color: "#fff",
+          border: "1px solid rgba(120,180,255,0.35)",
+          borderRadius: "100px",
+          cursor: "pointer",
+          backdropFilter: "blur(24px)",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.25), 0 0 40px rgba(60,130,220,0.25)",
+          display: "flex", alignItems: "center", gap: 12,
+          transition: "all 200ms ease",
+        }}
+        onMouseEnter={e => e.currentTarget.style.background = "linear-gradient(180deg, rgba(70,145,235,0.90), rgba(40,105,200,0.86))"}
+        onMouseLeave={e => e.currentTarget.style.background = "linear-gradient(180deg, rgba(60,130,220,0.82), rgba(30,90,180,0.78))"}
+        >
+          <span style={{
+            width: 10, height: 10, borderRadius: "50%",
+            background: "rgba(180,220,255,0.9)",
+            boxShadow: "0 0 10px rgba(180,220,255,0.8)",
+            display: "inline-block",
+          }} />
+          시뮬레이션 시작
+        </button>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="world" />
       <div className="world-photo">
-        <video autoPlay loop playsInline src="bg.mov" />
+        <video ref={videoRef} loop playsInline src="bg.mov" />
       </div>
       <div className="floor" />
       <div className="lens-frame" />
