@@ -1228,6 +1228,7 @@ window.Transcript = Transcript;
 function GestureController() {
   const [cursor, setCursor] = React.useState({ x: -300, y: -300, pinching: false });
   const stateRef = React.useRef({ pinching: false, cooldown: false });
+  const smooth = React.useRef({ x: -300, y: -300 });
 
   React.useEffect(() => {
     if (typeof Hands === 'undefined' || typeof Camera === 'undefined') return;
@@ -1257,8 +1258,14 @@ function GestureController() {
       const thumb = lm[4]; // 엄지 끝
 
       // 카메라 미러링 반영
-      const x = (1 - idx.x) * window.innerWidth;
-      const y = idx.y * window.innerHeight;
+      const rawX = (1 - idx.x) * window.innerWidth;
+      const rawY = idx.y * window.innerHeight;
+
+      // 지수 이동 평균으로 떨림 완화 (0.12 = 더 부드럽게, 높이면 더 빠르게 반응)
+      const A = 0.12;
+      smooth.current.x += (rawX - smooth.current.x) * A;
+      smooth.current.y += (rawY - smooth.current.y) * A;
+      const { x, y } = smooth.current;
 
       const dist = Math.hypot(idx.x - thumb.x, idx.y - thumb.y);
       const isPinching = dist < 0.07;
