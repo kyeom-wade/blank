@@ -459,6 +459,7 @@ body {
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
 
 <!-- tweaks-panel -->
@@ -1316,6 +1317,150 @@ function FaceCamera() {
 window.FaceCamera = FaceCamera;
 </script>
 
+<!-- gaze-tracker -->
+<script type="text/babel">
+function GazeTracker() {
+  const [gaze, setGaze]   = React.useState({ x: -300, y: -300 });
+  const [dwell, setDwell] = React.useState({ progress: 0, x: 0, y: 0 });
+  const smooth  = React.useRef({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+  const dwellRef = React.useRef({ el: null, start: 0, fired: false });
+
+  React.useEffect(() => {
+    if (typeof FaceMesh === 'undefined' || typeof Camera === 'undefined') return;
+
+    const videoEl = document.createElement('video');
+    videoEl.setAttribute('playsinline', '');
+
+    const faceMesh = new FaceMesh({
+      locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`,
+    });
+
+    faceMesh.setOptions({
+      maxNumFaces: 1,
+      refineLandmarks: true, // 홍채 랜드마크 활성화
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    });
+
+    faceMesh.onResults(results => {
+      if (!results.multiFaceLandmarks?.length) {
+        setGaze({ x: -300, y: -300 });
+        return;
+      }
+
+      const lm = results.multiFaceLandmarks[0];
+
+      // 홍채 중심: 468 (왼쪽), 473 (오른쪽)
+      const li = lm[468], ri = lm[473];
+
+      // 눈 소켓 중심 (눈동자 기준점)
+      const leX = (lm[33].x  + lm[133].x) / 2;
+      const leY = (lm[159].y + lm[145].y) / 2;
+      const reX = (lm[362].x + lm[263].x) / 2;
+      const reY = (lm[386].y + lm[374].y) / 2;
+
+      // 홍채의 눈 소켓 대비 오프셋 → 시선 방향
+      const offX = ((li.x - leX) + (ri.x - reX)) / 2;
+      const offY = ((li.y - leY) + (ri.y - reY)) / 2;
+
+      // 화면 좌표로 변환 (x는 미러링)
+      const raw = {
+        x: window.innerWidth  / 2 + (-offX) * window.innerWidth  * 28,
+        y: window.innerHeight / 2 +   offY  * window.innerHeight * 28,
+      };
+
+      // 지터 줄이기 위한 지수 이동 평균
+      const A = 0.18;
+      smooth.current.x += (raw.x - smooth.current.x) * A;
+      smooth.current.y += (raw.y - smooth.current.y) * A;
+      const { x, y } = smooth.current;
+      setGaze({ x, y });
+
+      // 드웰 클릭 (1.5초 응시 → 클릭)
+      const DWELL_MS = 1500;
+      const el = document.elementFromPoint(x, y);
+      const btn = el?.closest('button');
+
+      if (btn) {
+        if (dwellRef.current.el !== btn) {
+          dwellRef.current = { el: btn, start: Date.now(), fired: false };
+        }
+        const progress = Math.min((Date.now() - dwellRef.current.start) / DWELL_MS, 1);
+        setDwell({ progress, x, y });
+        if (progress >= 1 && !dwellRef.current.fired) {
+          dwellRef.current.fired = true;
+          btn.click();
+          setTimeout(() => {
+            dwellRef.current = { el: null, start: 0, fired: false };
+            setDwell({ progress: 0, x: 0, y: 0 });
+          }, 900);
+        }
+      } else {
+        if (dwellRef.current.el) {
+          dwellRef.current = { el: null, start: 0, fired: false };
+          setDwell({ progress: 0, x: 0, y: 0 });
+        }
+      }
+    });
+
+    const camera = new Camera(videoEl, {
+      onFrame: async () => { await faceMesh.send({ image: videoEl }); },
+      width: 640, height: 480,
+    });
+    camera.start().catch(console.error);
+    return () => { try { camera.stop(); } catch(e) {} };
+  }, []);
+
+  const visible = gaze.x > 0 && gaze.x < window.innerWidth;
+  const R = 22;
+  const circ = 2 * Math.PI * (R - 2);
+
+  return (
+    <>
+      {/* 시선 커서 */}
+      <div style={{
+        position: 'fixed',
+        left: gaze.x, top: gaze.y,
+        width: 20, height: 20,
+        borderRadius: '50%',
+        border: `1px solid rgba(130,215,185,${visible ? 0.65 : 0})`,
+        transform: 'translate(-50%, -50%)',
+        pointerEvents: 'none',
+        zIndex: 9998,
+        boxShadow: visible ? '0 0 14px rgba(100,200,165,0.3)' : 'none',
+        transition: 'border-color 200ms, box-shadow 200ms',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{
+          width: 3, height: 3, borderRadius: '50%',
+          background: `rgba(130,215,185,${visible ? 0.9 : 0})`,
+        }} />
+      </div>
+
+      {/* 드웰 진행 링 */}
+      {dwell.progress > 0 && (
+        <svg style={{
+          position: 'fixed',
+          left: dwell.x - R, top: dwell.y - R,
+          pointerEvents: 'none', zIndex: 9997, overflow: 'visible',
+        }} width={R * 2} height={R * 2}>
+          <circle cx={R} cy={R} r={R - 2}
+            fill="none" stroke="rgba(130,215,185,0.15)" strokeWidth="2" />
+          <circle cx={R} cy={R} r={R - 2}
+            fill="none" stroke="rgba(130,215,185,0.85)" strokeWidth="2"
+            strokeDasharray={circ}
+            strokeDashoffset={circ * (1 - dwell.progress)}
+            strokeLinecap="round"
+            transform={`rotate(-90 ${R} ${R})`}
+          />
+        </svg>
+      )}
+    </>
+  );
+}
+window.GazeTracker = GazeTracker;
+</script>
+
 <!-- gesture-controller -->
 <script type="text/babel">
 function GestureController() {
@@ -1698,6 +1843,7 @@ function App() {
         <Ceremony phase={phase} onAdvance={advance} onCancel={cancel} />
       )}
 
+      <GazeTracker />
       <GestureController />
 
       <TweaksPanel title="설정">
