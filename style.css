@@ -1,0 +1,448 @@
+/* Blank — Cold-blue AR glassmorphism system */
+:root {
+  --ink-1: #ffffff;
+
+  --cyan: oklch(0.48 0.15 218);
+  --cyan-dim: oklch(0.40 0.12 218);
+  --cyan-deep: oklch(0.32 0.10 220);
+  --coral: oklch(0.52 0.17 28);
+  --mint: oklch(0.48 0.13 170);
+  --violet: oklch(0.50 0.12 285);
+
+  --hair: rgba(190, 220, 255, 0.10);
+  --hair-strong: rgba(190, 220, 255, 0.22);
+  --glass: rgba(150, 190, 230, 0.04);
+  --glass-2: rgba(150, 190, 230, 0.07);
+
+  --font-sans: "Pretendard Variable", "Pretendard", -apple-system, system-ui, sans-serif;
+  --font-mono: "Pretendard Variable", "Pretendard", -apple-system, system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: #04060a;
+  color: var(--ink-1);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+  overflow: hidden;
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { width: 100%; height: 100vh; position: relative; }
+
+/* ───────────── World layer ───────────── */
+.world {
+  position: absolute; inset: 0;
+  background: #04060a;
+}
+.world-photo {
+  position: absolute; inset: 0;
+  overflow: hidden;
+}
+.world-photo video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: 37% 35%;
+}
+
+.floor {
+  display: none;
+}
+
+/* ───────────── Subject ───────────── */
+.subject {
+  position: absolute;
+  left: 50%; top: 44%;
+  transform: translate(-50%, -50%);
+  width: 320px; height: 440px;
+  display: flex; flex-direction: column; align-items: center;
+}
+.subject-figure { display: none; }
+
+/* ───────────── Glass primitives ───────────── */
+.glass {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.10) 100%),
+    rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.30);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  border-radius: 22px;
+  position: relative;
+}
+.glass::before {
+  content: ""; position: absolute; inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(255,255,255,0.18), transparent 60%);
+  pointer-events: none;
+}
+.glass-strong {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.12) 100%),
+    rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+}
+
+/* corner ticks */
+.ticks {
+  position: absolute; inset: 0; pointer-events: none;
+}
+.ticks::before, .ticks::after,
+.ticks > i:nth-child(1)::before, .ticks > i:nth-child(1)::after {
+  content: ""; position: absolute;
+  width: 8px; height: 8px;
+  border: 1px solid var(--cyan-dim);
+  opacity: 0.55;
+}
+.ticks::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+.ticks::after { top: -1px; right: -1px; border-left: none; border-bottom: none; }
+.ticks > i { position: absolute; inset: 0; }
+.ticks > i:nth-child(1)::before { bottom: -1px; left: -1px; border-right: none; border-top: none; top: auto; }
+.ticks > i:nth-child(1)::after { bottom: -1px; right: -1px; border-left: none; border-top: none; top: auto; }
+
+/* ───────────── Type utilities ───────────── */
+.mono { font-family: var(--font-mono); white-space: nowrap; }
+.upper { text-transform: uppercase; letter-spacing: 0.16em; }
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px; letter-spacing: 0.22em;
+  text-transform: uppercase; color: var(--ink-1);
+  white-space: nowrap;
+}
+.label {
+  font-family: var(--font-mono);
+  font-size: 9px; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--ink-1);
+  white-space: nowrap;
+}
+.value-lg {
+  font-family: var(--font-mono);
+  font-size: 28px; font-weight: 300; letter-spacing: -0.01em;
+  color: var(--ink-1);
+}
+.value-md {
+  font-family: var(--font-mono);
+  font-size: 16px; font-weight: 400; letter-spacing: 0;
+  color: var(--ink-1);
+}
+
+/* ───────────── HUD frames ───────────── */
+.lens-frame,
+.lens-frame::before {
+  display: none;
+}
+
+/* top status bar */
+.status-bar {
+  position: absolute; top: 28px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 18px;
+  border-radius: 100px;
+  z-index: 20;
+  white-space: nowrap;
+}
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); }
+.dot.dim { background: var(--ink-1); box-shadow: none; }
+
+/* subject id card */
+.subject-id-card {
+  position: absolute;
+  left: 37%;
+  top: 18%;
+  transform: translateX(-50%);
+  padding: 10px 16px 10px 14px;
+  z-index: 12;
+  border-radius: 100px;
+  animation: fadeUp 700ms ease both;
+}
+
+/* gaze reticle */
+.reticle {
+  position: absolute; left: 37%; top: 46%;
+  transform: translate(-50%, -50%);
+  width: 320px; height: 320px;
+  pointer-events: none; z-index: 5;
+  opacity: 0.6;
+}
+
+/* ───────────── Telemetry panels ───────────── */
+.panel { padding: 18px 20px; min-width: 240px; border-radius: 22px; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.panel-row { display: flex; align-items: baseline; gap: 12px; }
+
+/* heart ECG */
+.ecg-track {
+  height: 56px;
+  background:
+    repeating-linear-gradient(to right, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 12px),
+    repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 12px);
+  border-radius: 6px;
+  position: relative; overflow: hidden;
+}
+.ecg-line {
+  stroke: #fff;
+  fill: none; stroke-width: 1.4;
+}
+
+/* voice waveform */
+.wave {
+  display: flex; align-items: center; gap: 2px; height: 56px;
+}
+.wave i {
+  flex: 1; background: #fff; border-radius: 2px;
+  animation: wave 1.4s ease-in-out infinite;
+  opacity: 0.85;
+}
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.25); }
+  50% { transform: scaleY(1); }
+}
+
+/* truth meter */
+.meter {
+  position: relative; height: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 100px; overflow: hidden;
+}
+.meter-fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+  border-radius: 100px;
+}
+.meter-fill.warn { background: linear-gradient(90deg, var(--coral), oklch(0.52 0.17 50)); }
+
+/* tag chips */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 100px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.10);
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-1);
+  white-space: nowrap;
+  backdrop-filter: blur(20px);
+}
+.chip.cyan { color: var(--cyan); border-color: rgba(140, 200, 240, 0.3); }
+.chip.coral { color: var(--coral); border-color: rgba(240, 160, 130, 0.28); }
+.chip.mint { color: var(--mint); border-color: rgba(130, 210, 190, 0.28); }
+
+/* transcript */
+.transcript {
+  font-size: 13px; line-height: 1.7;
+  color: var(--ink-1); letter-spacing: -0.005em;
+}
+.t-truth { color: var(--mint); }
+.t-flag { color: var(--coral); position: relative; }
+.t-flag::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -2px;
+  border-bottom: 1px dashed var(--coral); opacity: 0.6;
+}
+
+/* ───────────── Action buttons ───────────── */
+.btn {
+  font-family: var(--font-sans);
+  font-size: 14px; font-weight: 500;
+  padding: 13px 24px;
+  white-space: nowrap;
+  background: rgba(255,255,255,0.20);
+  color: var(--ink-1);
+  border: 1px solid rgba(255,255,255,0.38);
+  border-radius: 100px;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  transition: all 200ms ease;
+  display: inline-flex; align-items: center; gap: 10px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.45);
+}
+.btn:hover {
+  background: rgba(255,255,255,0.32);
+  border-color: rgba(255,255,255,0.52);
+}
+.btn-primary {
+  background: linear-gradient(180deg, rgba(60, 130, 220, 0.82), rgba(30, 90, 180, 0.78));
+  color: #fff;
+  border: 1px solid rgba(120, 180, 255, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
+}
+.btn-primary:hover {
+  background: linear-gradient(180deg, rgba(70, 145, 235, 0.90), rgba(40, 105, 200, 0.86));
+}
+.btn-ghost {
+  background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08);
+  color: var(--ink-1);
+}
+
+.actions {
+  position: absolute; left: 50%; bottom: 60px;
+  transform: translateX(-50%);
+  display: flex; gap: 12px; z-index: 30;
+}
+
+/* ───────────── Animations ───────────── */
+@keyframes sweepRight {
+  0%   { transform: translateX(-100%); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translateX(100%);  opacity: 0; }
+}
+.swipe-sweep {
+  position: fixed; inset: 0;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(100,180,255,0.10) 35%,
+    rgba(140,200,255,0.22) 50%,
+    rgba(100,180,255,0.10) 65%,
+    transparent 100%);
+  animation: sweepRight 420ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+  z-index: 200;
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeDown {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-12px); }
+}
+@keyframes pulse-ring {
+  0% { transform: scale(0.9); opacity: 0.6; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+@keyframes blink { 50% { opacity: 0.3; } }
+@keyframes drift {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-3px, 2px); }
+}
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.fade-in { animation: fadeUp 600ms ease both; }
+.fade-out { animation: fadeDown 400ms ease both; }
+.blink { animation: blink 1.6s ease-in-out infinite; }
+.drift { animation: drift 7s ease-in-out infinite; }
+
+@keyframes panelEnter {
+  from { opacity: 0; transform: translateY(36px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.panel-pos {
+  position: absolute;
+  z-index: 10;
+  animation: panelEnter 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--enter-delay, 0ms);
+}
+
+.connector {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+/* ───────────── Ceremony overlay ───────────── */
+.ceremony-bg {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, rgba(20, 50, 90, 0.5), rgba(0,0,0,0.85));
+  backdrop-filter: blur(8px);
+  z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeUp 600ms ease both;
+}
+.ceremony-card {
+  width: 760px; padding: 48px 56px;
+  text-align: center;
+  white-space: normal;
+}
+.orb-pair {
+  position: relative;
+  width: 480px; height: 200px; margin: 28px auto 36px;
+}
+.orb {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 140px; height: 140px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(220, 240, 255, 0.45), rgba(80, 140, 200, 0.25) 40%, rgba(20, 40, 70, 0.6) 80%);
+  box-shadow:
+    inset 0 0 30px rgba(180, 220, 255, 0.3),
+    0 0 50px rgba(100, 180, 230, 0.3);
+  border: 1px solid rgba(180, 220, 255, 0.4);
+  transition: left 1500ms cubic-bezier(0.7, 0.0, 0.3, 1), right 1500ms cubic-bezier(0.7, 0.0, 0.3, 1);
+}
+.orb-l { left: 0; }
+.orb-r { right: 0; }
+.orb-pair.merged .orb-l { left: calc(50% - 100px); }
+.orb-pair.merged .orb-r { right: calc(50% - 100px); }
+
+.connect-line {
+  position: absolute; left: 70px; right: 70px; top: 50%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  box-shadow: 0 0 8px var(--cyan);
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 800ms ease;
+}
+.orb-pair.merged .connect-line { opacity: 0.8; }
+
+/* ───────────── Blank state ───────────── */
+.blank-mark {
+  position: absolute; left: 50%; top: 28px;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 22px;
+  z-index: 20;
+  white-space: nowrap;
+}
+.blank-pulse {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ink-1);
+  position: relative;
+}
+.blank-pulse::after {
+  content: ""; position: absolute; inset: -2px;
+  border: 1px solid var(--ink-1);
+  border-radius: 50%;
+  animation: pulse-ring 2.4s ease-out infinite;
+}
+
+.blank-shroud {
+  position: absolute; left: 37%; top: 46%;
+  transform: translate(-50%, -50%);
+  width: 540px; height: 540px;
+  border-radius: 50%;
+  border: 1px solid rgba(180, 220, 255, 0.10);
+  pointer-events: none;
+  animation: fadeUp 1200ms ease both;
+}
+.blank-shroud::before {
+  content: ""; position: absolute; inset: -40px;
+  border-radius: 50%;
+  border: 1px solid rgba(180, 220, 255, 0.05);
+}
+.blank-shroud::after {
+  content: ""; position: absolute; inset: 24px;
+  border-radius: 50%;
+  border: 1px dashed rgba(180, 220, 255, 0.08);
+}
+
+.blank-tagline {
+  position: absolute; left: 50%; bottom: 130px;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 20;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
