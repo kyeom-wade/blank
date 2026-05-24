@@ -15,6 +15,7 @@
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 
 <!-- tweaks-panel -->
 <script type="text/babel">
@@ -496,11 +497,11 @@ function StatusBar() {
       <span className="dot" />
       <span className="label" style={{ color: "var(--ink-1)" }}>블랭크 · v4.2</span>
       <span style={{ width: 1, height: 12, background: "var(--hair)" }} />
-      <span className="mono" style={{ fontSize: 11, color: "var(--ink-1)", letterSpacing: "0.16em" }}>
-        세션-A21·09 · 면접
+      <span className="mono" style={{ fontSize: 14, color: "var(--ink-1)", letterSpacing: "-0.03em" }}>
+        세션-D14·22 · 데이트
       </span>
       <span style={{ width: 1, height: 12, background: "var(--hair)" }} />
-      <span className="mono" style={{ fontSize: 11, color: "var(--ink-1)" }}>{hh}:{mm}</span>
+      <span className="mono" style={{ fontSize: 14, color: "var(--ink-1)", letterSpacing: "-0.03em" }}>{hh}:{mm}</span>
       <span className="label" style={{ color: "var(--cyan)" }}>● 분석 중</span>
     </div>
   );
@@ -512,7 +513,7 @@ function BlankBar() {
       <span className="blank-pulse" />
       <span className="label" style={{ color: "var(--ink-1)" }}>블랭크 · 상호 동의</span>
       <span style={{ width: 1, height: 12, background: "var(--hair)" }} />
-      <span className="mono" style={{ fontSize: 11, color: "var(--ink-1)", letterSpacing: "0.16em" }}>
+      <span className="mono" style={{ fontSize: 14, color: "var(--ink-1)", letterSpacing: "0.16em" }}>
         봉인 14:22 · 종료 14:52
       </span>
     </div>
@@ -525,9 +526,9 @@ function Subject({ blank }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <span className="dot" />
         <div>
-          <div className="label" style={{ color: "var(--ink-1)" }}>면접관 · 신원 확인</div>
+          <div className="label" style={{ color: "var(--ink-1)" }}>상대 · 신원 확인</div>
           <div style={{ fontSize: 16, fontWeight: 500, marginTop: 4, letterSpacing: "-0.01em" }}>
-            김세연 <span className="mono" style={{ fontSize: 11, color: "var(--ink-1)", marginLeft: 8 }}>수석 이사</span>
+            이서연 <span className="mono" style={{ fontSize: 14, color: "var(--ink-1)", marginLeft: 8, letterSpacing: "-0.03em" }}>연인 · 1년 8개월</span>
           </div>
         </div>
       </div>
@@ -535,17 +536,102 @@ function Subject({ blank }) {
   );
 }
 
-function Reticle() {
+// MediaPipe FaceMesh — extracts smoothed eye-midpoint screen position from the bg video.
+// Accounts for object-fit: cover + object-position: 37% 35% mapping.
+function useFaceTracker(videoRef, enabled = true) {
+  const [pos, setPos] = useState(null);
+  const stateRef = useRef({ x: 0.5, y: 0.4, init: false });
+  useEffect(() => {
+    if (!enabled) {
+      setPos(null);
+      stateRef.current.init = false;
+      return;
+    }
+    let cancelled = false;
+    let fm = null, raf = null;
+    let lastUi = 0;
+    const OBJ_POS_X = 0.37, OBJ_POS_Y = 0.35;
+
+    const init = async () => {
+      while (typeof FaceMesh === 'undefined' && !cancelled) {
+        await new Promise(r => setTimeout(r, 150));
+      }
+      if (cancelled) return;
+      fm = new FaceMesh({
+        locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`,
+      });
+      fm.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+      fm.onResults((res) => {
+        const lms = res.multiFaceLandmarks && res.multiFaceLandmarks[0];
+        if (!lms) return;
+        // eye corner midpoints (works regardless of blink)
+        const re = lms[33], rin = lms[133], lin = lms[362], le = lms[263];
+        if (!re || !rin || !lin || !le) return;
+        const tx = (re.x + rin.x + lin.x + le.x) / 4;
+        const ty = (re.y + rin.y + lin.y + le.y) / 4;
+        const s = stateRef.current;
+        if (!s.init) { s.x = tx; s.y = ty; s.init = true; }
+        else {
+          s.x += (tx - s.x) * 0.22;
+          s.y += (ty - s.y) * 0.22;
+        }
+        const now = performance.now();
+        if (now - lastUi < 33) return;
+        lastUi = now;
+        const v = videoRef.current;
+        if (!v) return;
+        const W = window.innerWidth, H = window.innerHeight;
+        const vW = v.videoWidth || 1920, vH = v.videoHeight || 1080;
+        const scale = Math.max(W / vW, H / vH);
+        const scW = vW * scale, scH = vH * scale;
+        const offX = -(scW - W) * OBJ_POS_X;
+        const offY = -(scH - H) * OBJ_POS_Y;
+        setPos({ x: offX + s.x * scW, y: offY + s.y * scH });
+      });
+
+      const tick = async () => {
+        if (cancelled) return;
+        const v = videoRef.current;
+        if (fm && v && v.readyState >= 2 && !v.paused) {
+          try { await fm.send({ image: v }); } catch (e) {}
+        }
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    };
+    init();
+    return () => {
+      cancelled = true;
+      if (raf) cancelAnimationFrame(raf);
+      try { fm && fm.close(); } catch (e) {}
+    };
+  }, [videoRef, enabled]);
+  return pos;
+}
+
+function Reticle({ pos }) {
+  if (!pos) return null;
+  // Eye midpoint sits in upper-third of a face; offset reticle center downward
+  // so the face oval is roughly centered around nose/mouth area.
+  const style = {
+    left: `${pos.x + 20}px`, top: `${pos.y + 10}px`,
+    transition: 'left 110ms linear, top 110ms linear',
+  };
   return (
-    <svg className="reticle" viewBox="0 0 320 320">
-      <circle cx="160" cy="160" r="140" stroke="rgba(180,220,255,0.10)" strokeWidth="0.8" fill="none" />
-      <circle cx="160" cy="160" r="80" stroke="rgba(180,220,255,0.06)" strokeWidth="0.6" fill="none" strokeDasharray="2 4" />
+    <svg className="reticle reticle-focus-in" viewBox="0 0 380 480" style={style}>
+      <ellipse cx="190" cy="240" rx="160" ry="215" stroke="rgba(15,25,40,0.55)" strokeWidth="1.4" fill="none" />
+      <ellipse cx="190" cy="240" rx="105" ry="145" stroke="rgba(15,25,40,0.30)" strokeWidth="1" fill="none" strokeDasharray="2 4" />
       {[
-        [40, 40, 1, 1], [280, 40, -1, 1], [40, 280, 1, -1], [280, 280, -1, -1],
+        [38, 38, 1, 1], [342, 38, -1, 1], [38, 442, 1, -1], [342, 442, -1, -1],
       ].map(([x, y, dx, dy], i) => (
-        <g key={i} stroke="var(--cyan-dim)" strokeWidth="1" opacity="0.55">
-          <line x1={x} y1={y} x2={x + 12 * dx} y2={y} />
-          <line x1={x} y1={y} x2={x} y2={y + 12 * dy} />
+        <g key={i} stroke="var(--cyan)" strokeWidth="2.4" opacity="1">
+          <line x1={x} y1={y} x2={x + 24 * dx} y2={y} />
+          <line x1={x} y1={y} x2={x} y2={y + 24 * dy} />
         </g>
       ))}
     </svg>
@@ -562,93 +648,197 @@ window.Reticle = Reticle;
 <script type="text/babel">
 const { useState, useEffect, useRef, useMemo } = React;
 
-function ECG({ bpm = 72, warn = false }) {
+// Master clock — video.currentTime (cycle 14.04s). All panels + transcript read this.
+const VIDEO_CYCLE = 14.04;
+const __videoClock = { ref: null };
+function registerVideoClock(ref) { __videoClock.ref = ref; }
+
+function useTimeline(updateMs = 100) {
+  const [t, setT] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const v = __videoClock.ref && __videoClock.ref.current;
+      if (v && v.readyState >= 2 && !v.paused) {
+        setT(v.currentTime);
+      } else {
+        // fallback (before video ready)
+        setT((performance.now() / 1000) % VIDEO_CYCLE);
+      }
+    }, updateMs);
+    return () => clearInterval(id);
+  }, [updateMs]);
+  let intensity, phase;
+  if (t < 5) { intensity = 0; phase = 'calm'; }
+  else if (t < 12) { intensity = (t - 5) / 7 * 0.55; phase = 'rising'; }
+  else { intensity = 0.55 + (Math.min(t, VIDEO_CYCLE) - 12) / 2 * 0.45; phase = 'spike'; }
+  return { t, intensity, phase };
+}
+
+// Hash → smooth 1D value noise. Deterministic but appears organic.
+const __ngHash = (n) => {
+  const x = Math.sin(n * 374.91 + 1.7) * 43758.5453;
+  return x - Math.floor(x);
+};
+function noise1D(x, seed = 0) {
+  const ix = Math.floor(x);
+  const fx = x - ix;
+  const a = __ngHash(ix + seed) * 2 - 1;
+  const b = __ngHash(ix + 1 + seed) * 2 - 1;
+  const u = fx * fx * (3 - 2 * fx);
+  return a * (1 - u) + b * u;
+}
+
+function ECG({ bpm = 72, intensity = 0, warn = false }) {
   const ref = useRef(null);
+  const intensityRef = useRef(intensity);
+  useEffect(() => { intensityRef.current = intensity; }, [intensity]);
   useEffect(() => {
     let raf, t = 0;
+    const gauss = (x, c, w) => Math.exp(-((x - c) * (x - c)) / (2 * w * w));
     const draw = () => {
       const el = ref.current;
       if (!el) return;
-      const W = 220, H = 56;
-      const mid = H / 2;
-      const basePx = 60;
-      const seed = (n) => Math.sin(n * 127.1 + 311.7) * 0.5 + 0.5;
+      const W = 240, H = 82;
+      const mid = H * 0.62;
+      const inten = intensityRef.current;
+      const ampBoost = 1 + inten * 0.85;
+      const basePx = 82 / (1 + inten * 0.35);
       const points = [];
       for (let i = 0; i < W; i++) {
-        const x = i;
         const pos = t + i;
-        const beatIdx = Math.floor(pos / basePx);
-        const jitter = (seed(beatIdx) - 0.5) * 10;
-        const span = basePx + jitter;
-        const beatStart = beatIdx * basePx + jitter * 0.5;
-        const phase = ((pos - beatStart) % span + span) % span / span;
-        const ampScale = 0.85 + seed(beatIdx + 99) * 0.3;
+        const nomIdx = Math.floor(pos / basePx);
+        // R-R variability (HRV) — beat interval jitter ±18%, increases at calm
+        const rrJ = noise1D(nomIdx, 11) * 0.18 * (1 - inten * 0.3);
+        const span = basePx * (1 + rrJ);
+        const beatStart = nomIdx * basePx + rrJ * basePx * 0.5;
+        const ph = ((pos - beatStart) % span + span) % span / span;
+        // per-beat amplitude variation
+        const ampVar = 1 + noise1D(nomIdx, 7) * 0.17;
+        // ~1 in 8 beats is slightly off — ectopic-ish (smaller R, no T)
+        const ectopic = __ngHash(nomIdx * 0.731 + 13) > 0.86;
+        const a = ampVar * ampBoost;
         let y = mid;
-        if (phase > 0.08 && phase < 0.14) y = mid - 3 * ampScale;
-        else if (phase > 0.18 && phase < 0.22) y = mid + 5 * ampScale;
-        else if (phase > 0.22 && phase < 0.26) y = mid - 20 * ampScale;
-        else if (phase > 0.26 && phase < 0.30) y = mid + 7 * ampScale;
-        else if (phase > 0.36 && phase < 0.46) y = mid - 4 * ampScale;
-        y += Math.sin(pos * 0.07) * 0.6 + Math.sin(pos * 0.19) * 0.3;
-        points.push(`${x},${y.toFixed(1)}`);
+        // P wave (rounded small bump before QRS)
+        y -= (ectopic ? 1.6 : 3.4) * a * gauss(ph, 0.16, 0.030);
+        // Q wave (sharp small dip)
+        y += 3.0 * a * gauss(ph, 0.27, 0.009);
+        // R wave (main spike — ectopic is shorter & shifted)
+        const rAmp = ectopic ? 18 : 28;
+        const rPos = ectopic ? 0.305 : 0.30;
+        const rWidth = ectopic ? 0.013 : 0.010;
+        y -= rAmp * a * gauss(ph, rPos, rWidth);
+        // S wave
+        y += 9.0 * a * gauss(ph, 0.34, 0.012);
+        // T wave (inverted on ectopic)
+        const tAmp = ectopic ? -3.0 : 6.5;
+        y -= tAmp * a * gauss(ph, 0.52, 0.050);
+        // 3-layer noise — baseline drift / muscle tremor / mains hum
+        y += noise1D(pos * 0.012, 31) * 2.4;
+        y += noise1D(pos * 0.22, 53) * (0.5 + inten * 0.9);
+        y += Math.sin(pos * 1.87 + nomIdx * 0.3) * 0.18;
+        y = Math.max(1.5, Math.min(H - 1.5, y));
+        points.push(`${i},${y.toFixed(2)}`);
       }
       el.setAttribute("points", points.join(" "));
-      t += 0.4;
+      t += 0.55;
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [bpm]);
+  }, []);
   return (
     <div className="ecg-track">
-      <svg viewBox="0 0 220 56" preserveAspectRatio="none" width="100%" height="56">
-        <polyline ref={ref} className="ecg-line" style={{ stroke: warn ? "var(--coral)" : "#fff" }} />
+      <svg viewBox="0 0 240 82" preserveAspectRatio="none" width="100%" height="82">
+        <polyline ref={ref} className="ecg-line" style={{ stroke: warn ? "var(--coral)" : "var(--ink-1)", strokeWidth: 1.6, transition: "stroke 400ms ease" }} />
       </svg>
     </div>
   );
 }
 
-function Wave({ count = 36, warn = false }) {
-  const bars = useMemo(() => Array.from({ length: count }, (_, i) => ({
-    delay: (i * 73) % 1400,
-    height: 0.3 + Math.abs(Math.sin(i * 1.7)) * 0.7,
-  })), [count]);
+function Wave({ count = 40, warn = false, intensity = 0 }) {
+  const barsRef = useRef([]);
+  const intensityRef = useRef(intensity);
+  useEffect(() => { intensityRef.current = intensity; }, [intensity]);
+  useEffect(() => {
+    let raf, t0 = performance.now();
+    const draw = () => {
+      const now = performance.now();
+      const t = (now - t0) / 1000;
+      const inten = intensityRef.current;
+      const N = barsRef.current.length;
+      // Speech vs silence — slow value noise drives speaking phase (5-8s cycles)
+      const speakPhase = noise1D(t * 0.55, 17);          // [-1,1]
+      const speaking = Math.min(1, Math.max(0, speakPhase + 0.35) * 1.5);
+      // Syllable rhythm — faster bursts within speaking
+      const syllRate = 3.4 + inten * 1.6;
+      const syllableRaw = Math.sin(t * syllRate) * 0.5 + 0.5;
+      const syllable = 0.35 + 0.65 * Math.pow(syllableRaw, 0.85);
+      // Sub-syllable flutter
+      const flutter = 0.92 + 0.08 * noise1D(t * 6.7, 41);
+      const envelope = speaking * syllable * flutter;
+      for (let i = 0; i < N; i++) {
+        const bar = barsRef.current[i];
+        if (!bar) continue;
+        const x = i / N;
+        // per-bar value noise — each bar has independent wobble that flows
+        const w =
+          noise1D(x * 4.0  + t * 0.5, i + 3)  * 0.55 +
+          noise1D(x * 11.0 - t * 0.9, i + 19) * 0.30 +
+          noise1D(x * 23.0 + t * 1.6, i + 37) * 0.18;
+        let h = Math.abs(w) * envelope;
+        h = h * (0.55 + inten * 0.65);
+        // mild center bias — outer edges slightly quieter (more natural mic-pickup feel)
+        h *= 0.78 + 0.28 * Math.sin(x * Math.PI);
+        h = Math.max(0.04, Math.min(1, h));
+        bar.style.height = `${(h * 100).toFixed(1)}%`;
+      }
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, []);
   return (
     <div className="wave">
-      {bars.map((b, i) => (
-        <i key={i} style={{
-          animationDelay: `-${b.delay}ms`,
-          height: `${b.height * 100}%`,
-          background: warn ? "var(--coral)" : "#fff",
-          boxShadow: warn ? "0 0 6px var(--coral)" : "none",
-        }} />
+      {Array.from({ length: count }, (_, i) => (
+        <i key={i}
+           ref={el => (barsRef.current[i] = el)}
+           style={{
+             animation: "none",
+             height: "30%",
+             background: warn ? "var(--coral)" : "var(--ink-1)",
+             boxShadow: warn ? "0 0 6px var(--coral)" : "none",
+             transition: "background 400ms ease",
+           }}
+        />
       ))}
     </div>
   );
 }
 
 function HeartPanel({ exiting }) {
-  const [bpm, setBpm] = useState(78);
-  useEffect(() => {
-    const id = setInterval(() => setBpm(70 + Math.round(Math.random() * 18)), 2200);
-    return () => clearInterval(id);
-  }, []);
+  const { intensity, phase, t } = useTimeline();
+  const jitter = Math.sin(t * 5.2) * 1.5;
+  const bpm = Math.round(72 + intensity * 50 + jitter);
+  const delta = bpm - 72;
+  const hrv = Math.max(12, Math.round(42 - intensity * 28));
+  const isSpike = phase === 'spike';
+  const isRising = phase !== 'calm';
   return (
     <div className={`glass panel panel-pos ${exiting ? "fade-out" : ""}`}
-      style={{ left: "5%", top: "22%", width: 268 }}>
+      style={{ left: "12%", top: "22%", width: 340, height: 280 }}>
       <i className="ticks"><i></i></i>
       <div className="panel-head">
         <span className="label">심박 · 실시간</span>
-        <span className="chip cyan">O₂</span>
+        <span className={`chip ${isRising ? 'coral' : 'cyan'}`} style={{ transition: 'all 300ms ease' }}>O₂</span>
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-        <span className="value-lg">{bpm}</span>
+        <span className="value-lg" style={{ color: isSpike ? "var(--coral)" : "var(--ink-1)", transition: 'color 400ms ease' }}>{bpm}</span>
         <span className="label" style={{ color: "var(--ink-1)" }}>BPM</span>
-        <span className="label" style={{ marginLeft: "auto", color: "var(--cyan)" }}>기준 대비 +6</span>
+        <span className="label" style={{ marginLeft: "auto", color: isRising ? "var(--coral)" : "var(--cyan)", transition: 'color 400ms ease' }}>기준 대비 +{delta}</span>
       </div>
-      <ECG bpm={bpm} />
+      <ECG bpm={bpm} intensity={intensity} warn={isSpike} />
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10 }}>
-        <span className="label">심박변이 42ms</span>
+        <span className="label">심박변이 {hrv}ms</span>
         <span className="label">산소포화도 98%</span>
       </div>
     </div>
@@ -656,6 +846,7 @@ function HeartPanel({ exiting }) {
 }
 
 function VoicePanel({ exiting }) {
+  const { intensity, phase } = useTimeline();
   const [expanded, setExpanded] = useState(false);
   const [scale, setScale] = useState(1);
   const wrapRef = useRef(null);
@@ -695,27 +886,33 @@ function VoicePanel({ exiting }) {
     return () => cancelAnimationFrame(raf);
   }, [expanded]);
   return (
-    <div ref={wrapRef} style={{ position: "absolute", right: "5%", top: "22%", zIndex: 10, transform: `scale(${scale.toFixed(3)})`, transformOrigin: "top right" }}>
+    <div ref={wrapRef} style={{ position: "absolute", right: "12%", top: "22%", zIndex: 10, transform: `scale(${scale.toFixed(3)})`, transformOrigin: "top right" }}>
     <div className={`glass panel ${exiting ? "fade-out" : "fade-in"}`}
-      style={{ width: 268 }}>
+      style={{ width: 340, height: 280 }}>
       <i className="ticks"><i></i></i>
       <div className="panel-head">
         <span className="label">음성 스트레스</span>
-        <span className="chip cyan">v3.4</span>
+        <span className={`chip ${phase === 'spike' ? 'coral' : 'cyan'}`} style={{ transition: 'all 300ms ease' }}>v3.4</span>
       </div>
-      <Wave warn={false} />
-      <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      <Wave warn={phase === 'spike'} intensity={intensity} />
+      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
         <div>
-          <div className="label" style={{ marginBottom: 4 }}>음정 변화</div>
-          <div className="meter"><div className="meter-fill" style={{ width: "62%" }} /></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span className="label">음정 변화</span>
+            <span className="mono" style={{ fontSize: 12, color: 'var(--ink-1)', letterSpacing: '-0.03em' }}>{Math.round(62 + intensity * 32)}%</span>
+          </div>
+          <div className="meter"><div className={`meter-fill ${intensity > 0.45 ? 'warn' : ''}`} style={{ width: `${Math.round(62 + intensity * 32)}%`, transition: 'width 280ms ease, background 400ms ease' }} /></div>
         </div>
         <div>
-          <div className="label" style={{ marginBottom: 4 }}>지터</div>
-          <div className="meter"><div className="meter-fill warn" style={{ width: "78%" }} /></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span className="label">지터</span>
+            <span className="mono" style={{ fontSize: 12, color: 'var(--coral)', letterSpacing: '-0.03em' }}>{Math.round(78 + intensity * 18)}%</span>
+          </div>
+          <div className="meter"><div className="meter-fill warn" style={{ width: `${Math.round(78 + intensity * 18)}%`, transition: 'width 280ms ease' }} /></div>
         </div>
       </div>
       <div className="label" style={{ marginTop: 10, color: "var(--ink-1)" }}>
-        스트레스 지수 <span style={{ color: "var(--coral)", marginLeft: 6 }}>0.71</span>
+        스트레스 지수 <span style={{ color: "var(--coral)", marginLeft: 6, transition: 'color 300ms ease' }}>{(0.71 + intensity * 0.24).toFixed(2)}</span>
       </div>
     </div>
     </div>
@@ -723,31 +920,32 @@ function VoicePanel({ exiting }) {
 }
 
 function FacePanel({ exiting }) {
+  const { intensity, phase } = useTimeline();
   const tags = [
-    { name: "경멸", val: 0.42, warn: true },
-    { name: "긴장", val: 0.58, warn: true },
-    { name: "진실된 미소", val: 0.12, warn: false },
-    { name: "시선 회피", val: 0.34, warn: true },
+    { name: "경멸", val: 0.42 + intensity * 0.24, warn: true },
+    { name: "긴장", val: 0.58 + intensity * 0.30, warn: true },
+    { name: "진실된 미소", val: Math.max(0.02, 0.12 - intensity * 0.10), warn: false },
+    { name: "시선 회피", val: 0.34 + intensity * 0.42, warn: true },
   ];
   return (
     <div className={`glass panel panel-pos ${exiting ? "fade-out" : ""}`}
-      style={{ right: "5%", bottom: "22%", width: 300 }}>
+      style={{ right: "12%", bottom: "20%", width: 340, height: 280 }}>
       <i className="ticks"><i></i></i>
       <div className="panel-head">
         <span className="label">미세표정 · 32 AU</span>
-        <span className="chip mint">표정-7</span>
+        <span className={`chip ${phase === 'spike' ? 'coral' : 'mint'}`} style={{ transition: 'all 300ms ease' }}>표정-{phase === 'spike' ? 12 : 7}</span>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
         {tags.map((t) => (
           <div key={t.name}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, gap: 8 }}>
-              <span style={{ fontSize: 12, color: "var(--ink-1)", whiteSpace: "nowrap" }}>{t.name}</span>
-              <span className="mono" style={{ fontSize: 11, color: t.warn ? "var(--coral)" : "var(--mint)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, gap: 8 }}>
+              <span style={{ fontSize: 14, color: "var(--ink-1)", whiteSpace: "nowrap" }}>{t.name}</span>
+              <span className="mono" style={{ fontSize: 14, color: t.warn ? "var(--coral)" : "var(--mint)", letterSpacing: "-0.03em", transition: 'color 300ms ease' }}>
                 {t.val.toFixed(2)}
               </span>
             </div>
             <div className="meter">
-              <div className={`meter-fill ${t.warn ? "warn" : ""}`} style={{ width: `${t.val * 100}%` }} />
+              <div className={`meter-fill ${t.warn ? "warn" : ""}`} style={{ width: `${Math.min(100, t.val * 100)}%`, transition: 'width 280ms ease' }} />
             </div>
           </div>
         ))}
@@ -757,63 +955,124 @@ function FacePanel({ exiting }) {
 }
 
 function TruthPanel({ exiting }) {
+  const { intensity, t } = useTimeline();
+  const truth = Math.round(61 - intensity * 24);
+  // Suspect lines appear only after their corresponding utterance
+  const suspects = [
+    { at: 4.8, text: "당연히 알지" },
+    { at: 8.8, text: "진짜 안다니까" },
+    { at: 12.0, text: "눈썹 바뀐거 아니야?" },
+  ];
+  const visibleSuspects = suspects.filter((s) => t >= s.at);
+  const suspectCount = visibleSuspects.length;
   return (
     <div className={`glass panel panel-pos ${exiting ? "fade-out" : ""}`}
-      style={{ left: "5%", bottom: "22%", width: 280 }}>
+      style={{ left: "12%", bottom: "20%", width: 340, height: 280 }}>
       <i className="ticks"><i></i></i>
       <div className="panel-head">
         <span className="label">진실 신뢰도</span>
-        <span className="chip coral">의심 3건</span>
+        <span className="chip coral">의심 {suspectCount}건</span>
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
-        <span className="value-lg" style={{ color: "var(--coral)" }}>61</span>
-        <span className="label" style={{ color: "var(--ink-1)" }}>%  · 14분 세션</span>
+        <span className="value-lg" style={{ color: "var(--coral)", transition: 'color 300ms ease' }}>{truth}</span>
+        <span className="label" style={{ color: "var(--ink-1)" }}>%  · 14분 대화</span>
       </div>
       <div className="meter" style={{ height: 6 }}>
-        <div className="meter-fill warn" style={{ width: "61%" }} />
+        <div className="meter-fill warn" style={{ width: `${truth}%`, transition: 'width 320ms ease' }} />
       </div>
       <div style={{ marginTop: 14 }}>
         <div className="label" style={{ marginBottom: 6 }}>의심 발언</div>
-        <div className="transcript" style={{ fontSize: 12 }}>
-          "<span className="t-flag">제가 그 프로젝트를 처음부터 끝까지 리드했습니다</span>"
-        </div>
-        <div className="transcript" style={{ fontSize: 12, marginTop: 6 }}>
-          "<span className="t-flag">현재 다른 곳에서 오퍼는 없습니다</span>"
-        </div>
+        {visibleSuspects.map((s, i) => (
+          <div key={s.at}
+            className="transcript"
+            style={{
+              fontSize: 14, marginTop: i === 0 ? 0 : 6,
+              animation: 'fadeUp 380ms cubic-bezier(0.2,0.8,0.2,1) both',
+            }}>
+            "<span className="t-flag">{s.text}</span>"
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
 function Transcript({ exiting }) {
-  const [idx, setIdx] = useState(0);
+  // Timestamps in seconds, aligned to the 14.04s video loop.
+  // "당연히 알지" pushed 1s later from prior pacing.
   const lines = [
-    { t: "네, 그 부분은 ", flag: "팀 전체가 협업한 결과", t2: "였고 제가 방향성을 잡았습니다." },
-    { t: "이전 회사를 떠난 이유는 ", flag: "성장 기회 때문", t2: "이라고 보시면 됩니다." },
-    { t: "예. ", flag: "현재 다른 곳에서 진행 중인 절차는 없습니다.", t2: "" },
+    { at: 1.0,  text: "자기야, 나 오늘 달라진거 알겠어?" },
+    { at: 4.8,  text: "당연히 알지." },
+    { at: 5.8,  text: "엥? 아닌 것 같은데?" },
+    { at: 8.8,  text: "아니 진짜 안다니까." },
+    { at: 10.8, text: "어디?" },
+    { at: 12.0, text: "눈썹 바뀐거 아니야?" },
   ];
+  const { t } = useTimeline(80);
+  const newIdx = (() => {
+    for (let k = lines.length - 1; k >= 0; k--) {
+      if (t >= lines[k].at) return k;
+    }
+    return -1; // before first line — nothing shown
+  })();
+  const [idx, setIdx] = useState(-1);
+  const [prevIdx, setPrevIdx] = useState(null);
+
   useEffect(() => {
     if (exiting) return;
-    const id = setInterval(() => setIdx((i) => (i + 1) % lines.length), 5200);
-    return () => clearInterval(id);
-  }, [exiting]);
-  const line = lines[idx];
+    if (newIdx !== idx) {
+      if (idx !== -1) setPrevIdx(idx);
+      setIdx(newIdx);
+    }
+  }, [newIdx, idx, exiting]);
+
+  // clear the outgoing line after its slide-out finishes
+  useEffect(() => {
+    if (prevIdx === null) return;
+    const id = setTimeout(() => setPrevIdx(null), 480);
+    return () => clearTimeout(id);
+  }, [prevIdx]);
+
+  const lineStyle = {
+    position: "absolute",
+    left: 0, right: 0,
+    display: "block",
+    color: "#ffffff",
+    fontWeight: 500,
+    textShadow: "0 2px 12px rgba(0,0,0,0.55), 0 0 2px rgba(0,0,0,0.4)",
+    willChange: "transform, opacity",
+  };
+
   return (
-    <div className={`glass panel-pos ${exiting ? "fade-out" : ""}`}
+    <div
       style={{
-        left: "calc(50% - 340px)", bottom: 130,
-        padding: "12px 20px", width: 680, borderRadius: 12,
+        position: "absolute",
+        left: 0, right: 0, bottom: 300,
+        textAlign: "center",
+        pointerEvents: "none",
+        zIndex: 10,
+        height: 0,
       }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-        <span className="dot" />
-        <span className="label">실시간 자막 · 한국어</span>
-        <span className="label" style={{ marginLeft: "auto", color: "var(--ink-1)" }}>00:14:22</span>
-      </div>
-      <div className="transcript" key={idx} style={{ animation: "fadeUp 500ms ease both" }}>
-        {line.t}
-        <span className="t-flag">{line.flag}</span>
-        {line.t2}
-      </div>
+      {prevIdx !== null && (
+        <div key={`prev-${prevIdx}`}
+          className="transcript"
+          style={{
+            ...lineStyle,
+            animation: "subSlideOut 480ms cubic-bezier(0.4, 0, 0.2, 1) both",
+          }}>
+          {lines[prevIdx].text}
+        </div>
+      )}
+      {idx >= 0 && (
+        <div key={`cur-${idx}`}
+          className="transcript"
+          style={{
+            ...lineStyle,
+            animation: "subSlideIn 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both",
+          }}>
+          {lines[idx].text}
+        </div>
+      )}
     </div>
   );
 }
@@ -974,7 +1233,7 @@ function Ceremony({ phase, onAdvance, onCancel }) {
               textAlign: "center", whiteSpace: "nowrap",
             }}>
               <div className="label">나</div>
-              <div className="mono" style={{ fontSize: 11, color: "var(--ink-1)", marginTop: 4 }}>이 정 우</div>
+              <div className="mono" style={{ fontSize: 14, color: "var(--ink-1)", marginTop: 4 }}>이 정 우</div>
             </div>
           </div>
           <div className="connect-line" />
@@ -984,7 +1243,7 @@ function Ceremony({ phase, onAdvance, onCancel }) {
               textAlign: "center", whiteSpace: "nowrap",
             }}>
               <div className="label">상대방</div>
-              <div className="mono" style={{ fontSize: 11, color: "var(--ink-1)", marginTop: 4 }}>김 세 연</div>
+              <div className="mono" style={{ fontSize: 14, color: "var(--ink-1)", marginTop: 4 }}>김 세 연</div>
             </div>
           </div>
           {phase === "awaiting" && (
@@ -1128,7 +1387,7 @@ function AtmospherePanel() {
             <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
               <span className="label">{r.l}</span>
               <span className="mono" style={{fontSize:14,color:r.c}}>{r.v}
-                <span style={{fontSize:9,color:'var(--ink-1)',marginLeft:2}}>{r.u}</span>
+                <span style={{fontSize:14,color:'var(--ink-1)',marginLeft:2,letterSpacing:'-0.03em'}}>{r.u}</span>
               </span>
             </div>
             <div className="meter">
@@ -1160,9 +1419,9 @@ function ObjectsPanel() {
         {objs.map(o=>(
           <div key={o.n} style={{display:'flex',alignItems:'center',gap:8}}>
             <div style={{width:4,height:4,borderRadius:'50%',background:'var(--mint)',flexShrink:0}}/>
-            <span style={{flex:1,fontSize:12,color:'var(--ink-1)'}}>{o.n}</span>
-            <span className="mono" style={{fontSize:10,color:'var(--ink-1)'}}>{o.d}</span>
-            <span className="mono" style={{fontSize:10,color:'var(--mint)',width:28,textAlign:'right'}}>{o.c}%</span>
+            <span style={{flex:1,fontSize:14,color:'var(--ink-1)'}}>{o.n}</span>
+            <span className="mono" style={{fontSize:14,color:'var(--ink-1)',letterSpacing:'-0.03em'}}>{o.d}</span>
+            <span className="mono" style={{fontSize:14,color:'var(--mint)',width:32,textAlign:'right',letterSpacing:'-0.03em'}}>{o.c}%</span>
           </div>
         ))}
       </div>
@@ -1188,7 +1447,7 @@ function SpectrumPanel() {
               borderRadius:'3px 3px 0 0',
               animation:`wave ${1.1+i*.25}s ease-in-out infinite`,
             }}/>
-            <span className="label" style={{fontSize:8}}>{b.l}</span>
+            <span className="label">{b.l}</span>
           </div>
         ))}
       </div>
@@ -1341,11 +1600,11 @@ function NetworkPanel() {
 
 function ProfileExpandedPanel() {
   const rows=[
-    {l:'소속',v:'Spade Company · 수석 이사'},
-    {l:'경력',v:'17년 · 전략 기획'},
-    {l:'연결망',v:'LinkedIn 847 · 공통 12'},
-    {l:'최근 활동',v:'3시간 전 · 서울'},
-    {l:'언어',v:'한국어  영어  일본어'},
+    {l:'관계',v:'연인 · 1년 8개월'},
+    {l:'거주',v:'서울 마포구 망원동'},
+    {l:'연결망',v:'Instagram 1.2K · 공통 24'},
+    {l:'최근 활동',v:'23분 전 · 망원동'},
+    {l:'언어',v:'한국어  영어'},
   ];
   return (
     <div className="glass panel panel-pos" style={{right:'5%',top:'22%',width:256,animationDelay:'80ms'}}>
@@ -1358,7 +1617,7 @@ function ProfileExpandedPanel() {
         {rows.map(r=>(
           <div key={r.l} style={{display:'flex',gap:12,alignItems:'baseline'}}>
             <span className="label" style={{width:58,flexShrink:0,color:'var(--ink-1)'}}>{r.l}</span>
-            <span style={{fontSize:12,color:'var(--ink-1)',lineHeight:1.5}}>{r.v}</span>
+            <span style={{fontSize:14,color:'var(--ink-1)',lineHeight:1.5}}>{r.v}</span>
           </div>
         ))}
       </div>
@@ -1368,10 +1627,10 @@ function ProfileExpandedPanel() {
 
 function InteractionLogPanel() {
   const logs=[
-    {t:'2026.03.12',e:'첫 미팅 · 프로젝트 킥오프'},
-    {t:'2026.04.01',e:'계약 협의 · 긍정적'},
-    {t:'2026.04.22',e:'진행 점검 · 우려 제기'},
-    {t:'오늘 14:08',e:'면접 세션 · 진행 중',now:true},
+    {t:'2024.09.18',e:'첫 만남 · 소개팅'},
+    {t:'2025.02.14',e:'기념일 데이트 · 좋은 분위기'},
+    {t:'2026.04.22',e:'다툼 · 미해결'},
+    {t:'오늘 14:08',e:'데이트 · 진행 중',now:true},
   ];
   return (
     <div className="glass panel panel-pos" style={{right:'5%',bottom:'22%',width:280,animationDelay:'160ms'}}>
@@ -1380,13 +1639,13 @@ function InteractionLogPanel() {
         <span className="label">상호작용 로그</span>
         <span className="chip coral">4회</span>
       </div>
-      <div style={{display:'flex',flexDirection:'column',gap:10,paddingLeft:14,borderLeft:'1px solid rgba(180,220,255,.10)'}}>
+      <div style={{display:'flex',flexDirection:'column',gap:10,paddingLeft:14,borderLeft:'1px solid rgba(15,25,40,.14)'}}>
         {logs.map((l,i)=>(
           <div key={i} style={{position:'relative'}}>
             <div style={{position:'absolute',left:-18,top:5,width:5,height:5,borderRadius:'50%',
-              background:l.now?'var(--cyan)':'rgba(180,220,255,.25)'}}/>
+              background:l.now?'var(--cyan)':'rgba(15,25,40,.30)'}}/>
             <div className="label" style={{color:l.now?'var(--cyan)':'var(--ink-1)'}}>{l.t}</div>
-            <div style={{fontSize:12,color:'var(--ink-1)',marginTop:2}}>{l.e}</div>
+            <div style={{fontSize:14,color:'var(--ink-1)',marginTop:2}}>{l.e}</div>
           </div>
         ))}
       </div>
@@ -1458,7 +1717,7 @@ function CogLoadPanel() {
             <div key={r.l}>
               <div style={{display:'flex',justifyContent:'space-between',marginBottom:3,gap:10}}>
                 <span className="label">{r.l}</span>
-                <span className="mono" style={{fontSize:12,color:r.warn?'var(--coral)':'var(--cyan)'}}>{r.v}</span>
+                <span className="mono" style={{fontSize:14,color:r.warn?'var(--coral)':'var(--cyan)'}}>{r.v}</span>
               </div>
               <div className="meter">
                 <div className={`meter-fill${r.warn?' warn':''}`} style={{width:r.w}}/>
@@ -1554,7 +1813,7 @@ function BreathPanel() {
           </div>
           <div>
             <div className="label" style={{color:'var(--ink-1)'}}>리듬</div>
-            <div className="mono" style={{fontSize:12,color:'var(--ink-1)',marginTop:2}}>규칙적</div>
+            <div className="mono" style={{fontSize:14,color:'var(--ink-1)',marginTop:2}}>규칙적</div>
           </div>
         </div>
       </div>
@@ -1564,8 +1823,8 @@ function BreathPanel() {
 
 function RecommendPanel() {
   const actions=[
-    {icon:'◎',text:'5분 후 환기 권장',c:'var(--mint)'},
-    {icon:'◈',text:'인지 부하 감소 위해 단순 질문으로 유도',c:'var(--coral)'},
+    {icon:'◎',text:'5분 후 분위기 환기 권장',c:'var(--mint)'},
+    {icon:'◈',text:'긴장 완화 위해 가벼운 주제로 전환',c:'var(--coral)'},
     {icon:'◉',text:'대화 속도 15% 낮추면 진실도 상승',c:'var(--cyan)'},
   ];
   return (
@@ -1578,8 +1837,8 @@ function RecommendPanel() {
       <div style={{display:'flex',flexDirection:'column',gap:12}}>
         {actions.map((a,i)=>(
           <div key={i} style={{display:'flex',gap:10,alignItems:'flex-start'}}>
-            <span style={{color:a.c,fontSize:12,marginTop:1,flexShrink:0}}>{a.icon}</span>
-            <span style={{fontSize:12,color:'var(--ink-1)',lineHeight:1.6}}>{a.text}</span>
+            <span style={{color:a.c,fontSize:14,marginTop:1,flexShrink:0}}>{a.icon}</span>
+            <span style={{fontSize:14,color:'var(--ink-1)',lineHeight:1.6}}>{a.text}</span>
           </div>
         ))}
       </div>
@@ -1600,7 +1859,7 @@ function ViewIndicator({ current, total, labels }) {
       {Array.from({length:total},(_,i)=>(
         <div key={i} style={{
           width:i===current?18:5,height:4,borderRadius:2,
-          background:i===current?'rgba(180,220,255,.72)':'rgba(180,220,255,.20)',
+          background:i===current?'var(--cyan)':'rgba(15,25,40,.22)',
           transition:'width 300ms ease,background 300ms ease',
         }}/>
       ))}
@@ -1637,10 +1896,15 @@ function App() {
   const [showCeremony, setShowCeremony] = useAppState(false);
   const [started, setStarted] = useAppState(false);
   const [showTutorial, setShowTutorial] = useAppState(false);
-  const [showBlankProposal, setShowBlankProposal] = useAppState(false);
   const [currentView, setCurrentView] = useAppState(1);
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const videoRef = useRef(null);
+  useEffect(() => {
+    registerVideoClock(videoRef);
+    return () => registerVideoClock({ current: null });
+  }, []);
+  const faceTrackingEnabled = currentView === 0 && (phase === "analyzing") && t.previewAnalysis !== "off";
+  const eyePos = useFaceTracker(videoRef, faceTrackingEnabled);
 
   const isAnalyzing = (phase === "analyzing") && t.previewAnalysis !== "off";
   const isBlank = phase === "blank" || (phase === "analyzing" && t.previewAnalysis === "off");
@@ -1655,13 +1919,6 @@ function App() {
       videoRef.current.play().catch(() => {});
     }
   }, [started]);
-
-  useAppEffect(() => {
-    if (started && !showTutorial) {
-      const id = setTimeout(() => setShowBlankProposal(true), 30000);
-      return () => clearTimeout(id);
-    }
-  }, [started, showTutorial]);
 
   const start   = () => { setPhase("propose"); setShowCeremony(true); };
   const advance = () => {
@@ -1694,7 +1951,7 @@ function App() {
         <div style={{ textAlign: "center" }}>
           <div style={{
             fontFamily: "var(--font-sans)",
-            fontSize: 11, letterSpacing: "0.28em", textTransform: "uppercase",
+            fontSize: 14, letterSpacing: "-0.03em", textTransform: "uppercase",
             color: "rgba(180,220,255,0.35)", marginBottom: 16,
           }}>BLANK · AR GLASSES · 2040</div>
           <div style={{
@@ -1744,13 +2001,13 @@ function App() {
     <>
       <div className="world" />
       <div className="world-photo">
-        <video ref={videoRef} loop playsInline src="bg.mov" />
+        <video ref={videoRef} loop playsInline src="future-img.mp4" />
       </div>
       <div className="floor" />
       <div className="lens-frame" />
 
-      {t.showSubject && <Subject blank={isBlank} />}
-      {t.showReticle && !isBlank && <Reticle />}
+      {currentView === 0 && !isBlank && <div className="ar-lens" />}
+      {t.showReticle && !isBlank && currentView === 0 && <Reticle pos={eyePos} />}
 
       {!isBlank && <StatusBar />}
       {isBlank && <BlankBar />}
@@ -1762,8 +2019,8 @@ function App() {
             <div style={{ display: 'contents', '--enter-delay': '80ms' }}><VoicePanel /></div>
             <div style={{ display: 'contents', '--enter-delay': '160ms' }}><FacePanel /></div>
             <div style={{ display: 'contents', '--enter-delay': '240ms' }}><TruthPanel /></div>
-            <div style={{ display: 'contents', '--enter-delay': '320ms' }}><Transcript /></div>
           </>}
+          <Transcript />
         </>
       )}
 
@@ -1784,24 +2041,17 @@ function App() {
 
       {!isBlank && phase === "analyzing" && (
         <div className="actions">
-          <button className="btn btn-primary" onClick={start}>
-            <span style={{
-              width: 12, height: 12, borderRadius: "50%",
-              background: "var(--cyan)", boxShadow: "0 0 10px var(--cyan)",
-            }} />
-            Blank 제안하기
-          </button>
           <button className="btn" onClick={() => setCurrentView(v => v === 0 ? 1 : 0)} style={{
             background: currentView === 0
-              ? 'rgba(100,200,255,0.18)'
-              : 'rgba(180,220,255,0.08)',
+              ? 'rgba(220, 240, 255, 0.78)'
+              : 'rgba(255, 255, 255, 0.48)',
             border: currentView === 0
-              ? '1px solid rgba(100,200,255,0.4)'
-              : '1px solid rgba(180,220,255,0.15)',
+              ? '1px solid rgba(60, 130, 200, 0.4)'
+              : '1px solid rgba(15, 25, 40, 0.14)',
           }}>
             <span style={{
               width: 8, height: 8, borderRadius: '50%',
-              background: currentView === 0 ? 'var(--cyan)' : 'rgba(180,220,255,0.3)',
+              background: currentView === 0 ? 'var(--cyan)' : 'rgba(15, 25, 40, 0.28)',
               boxShadow: currentView === 0 ? '0 0 8px var(--cyan)' : 'none',
               transition: 'all 250ms ease',
               display: 'inline-block',
@@ -1829,43 +2079,13 @@ function App() {
               maxWidth: 460, marginLeft: "auto", marginRight: "auto",
               whiteSpace: "pre-line",
             }}>
-              {"당신은 지금 면접관이고, 앞에 면접자가 앉아있습니다.\n당신의 질문에 면접자는 답변을 하고 있지만, 뭔가 신뢰가 가지 않습니다.\n\n당신의 AR글래스에는 거짓말을 분석하는 기능이 있습니다.\n우측 하단의 [분석 켜기] 버튼을 핀치하면 분석모드가 켜집니다."}
+              {"당신은 지금 연인과 데이트 중이고, 앞에 연인이 앉아있습니다.\n연인이 당신의 질문에 답하고 있지만, 어딘가 자연스럽지 않고 신뢰가 가지 않습니다.\n\n당신의 AR글래스에는 거짓말을 분석하는 기능이 있습니다.\n우측 하단의 [분석 켜기] 버튼을 핀치하면 분석모드가 켜집니다."}
             </p>
             <div style={{ marginTop: 28 }}>
               <button className="btn btn-primary" onClick={() => setShowTutorial(false)} style={{
                 fontSize: 15, padding: "14px 40px",
               }}>
                 확인
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showBlankProposal && !showCeremony && (
-        <div className="ceremony-bg">
-          <div className="glass glass-strong ceremony-card" style={{ maxWidth: 520 }}>
-            <div className="eyebrow" style={{ color: "var(--cyan)" }}>블랭크 · 수신</div>
-            <h1 style={{ fontSize: 26, fontWeight: 300, marginTop: 12, letterSpacing: "-0.02em" }}>
-              Blank 제안이 도착했습니다
-            </h1>
-            <p style={{
-              fontSize: 14, color: "var(--ink-1)", marginTop: 14, lineHeight: 1.8,
-              maxWidth: 460, marginLeft: "auto", marginRight: "auto",
-              whiteSpace: "pre-line",
-            }}>
-              {"면접자가 블랭크를 제안했습니다.\n분석을 중단하고, 서로의 데이터를 봉인할 수 있습니다."}
-            </p>
-            <div style={{ marginTop: 28, display: 'flex', gap: 12, justifyContent: 'center' }}>
-              <button className="btn btn-ghost" onClick={() => setShowBlankProposal(false)} style={{
-                fontSize: 15, padding: "14px 32px",
-              }}>
-                거절
-              </button>
-              <button className="btn btn-primary" onClick={() => { setShowBlankProposal(false); start(); }} style={{
-                fontSize: 15, padding: "14px 32px",
-              }}>
-                수락
               </button>
             </div>
           </div>
@@ -1892,7 +2112,6 @@ function App() {
           <TweakToggle label="시선 조준점" value={t.showReticle} onChange={(v) => setTweak("showReticle", v)} />
         </TweakSection>
         <TweakSection label="흐름">
-          <TweakButton label="블랭크 제안 시작 →" onClick={start} />
           <TweakButton label="처음으로 리셋" onClick={reset} secondary />
         </TweakSection>
       </TweaksPanel>
