@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI-free 공간 상호 이용 동의서</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Noto+Serif+KR:wght@300;400;500;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f7f3ea;
+    --paper-deep: #efe9da;
+    --ink: #1c1c1a;
+    --ink-soft: #4a4a46;
+    --ink-mute: #8a877e;
+    --line: #d8d2c2;
+    --line-soft: #e8e2d2;
+    --accent: #6b5a3e;
+    --warn: #b85c38;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Noto Serif KR', 'Cormorant Garamond', serif;
+    background:
+      radial-gradient(circle at 20% 10%, #fdfaf2 0%, transparent 40%),
+      radial-gradient(circle at 80% 90%, #f1ead8 0%, transparent 50%),
+      var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 64px 20px 80px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+    background: #fdfaf2;
+    padding: 72px 72px 56px;
+    position: relative;
+    box-shadow:
+      0 1px 0 rgba(0,0,0,0.04),
+      0 30px 60px -20px rgba(60, 50, 30, 0.15),
+      0 8px 20px -10px rgba(60, 50, 30, 0.08);
+    border-radius: 2px;
+  }
+  .container::before {
+    content: '';
+    position: absolute;
+    inset: 12px;
+    border: 1px solid var(--line-soft);
+    pointer-events: none;
+    border-radius: 1px;
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 48px;
+    position: relative;
+  }
+  .crest {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border: 1px solid var(--ink);
+    border-radius: 50%;
+    margin-bottom: 20px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px;
+    font-style: italic;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  h1 {
+    font-family: 'Noto Serif KR', serif;
+    font-weight: 500;
+    font-size: 28px;
+    letter-spacing: -0.01em;
+    margin: 0 0 10px;
+  }
+  .subtitle {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 15px;
+    color: var(--ink-mute);
+    letter-spacing: 0.04em;
+  }
+  .divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 24px auto 0;
+    color: var(--line);
+  }
+  .divider::before,
+  .divider::after {
+    content: '';
+    flex: 1;
+    max-width: 80px;
+    height: 1px;
+    background: var(--line);
+  }
+  .divider span {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 14px;
+    color: var(--ink-mute);
+    letter-spacing: 0.3em;
+  }
+
+  /* Intro */
+  .intro {
+    font-size: 14.5px;
+    color: var(--ink-soft);
+    text-align: center;
+    margin-bottom: 48px;
+    padding: 0 16px;
+    font-weight: 300;
+  }
+  .intro em {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  /* Sections */
+  section { margin-bottom: 36px; }
+  h2 {
+    font-family: 'Noto Serif KR', serif;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    margin: 0 0 18px;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  h2 .num {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 18px;
+    color: var(--accent);
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--line-soft);
+  }
+
+  /* Form fields */
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 18px;
+  }
+  .field { display: flex; flex-direction: column; }
+  .field.full { grid-column: 1 / -1; }
+
+  label {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    color: var(--ink-mute);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  input[type="text"],
+  input[type="date"],
+  input[type="email"],
+  textarea {
+    border: none;
+    border-bottom: 1px solid var(--line);
+    padding: 8px 2px 10px;
+    font-size: 15px;
+    font-family: 'Noto Serif KR', serif;
+    background: transparent;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.25s ease;
+    font-weight: 400;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: #bdb8a8;
+    font-style: italic;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 14px;
+  }
+  input[type="text"]:focus,
+  input[type="date"]:focus,
+  input[type="email"]:focus,
+  textarea:focus {
+    border-bottom-color: var(--ink);
+  }
+  textarea {
+    border: 1px solid var(--line);
+    padding: 14px 16px;
+    resize: vertical;
+    min-height: 100px;
+    border-radius: 1px;
+    background: rgba(255, 253, 246, 0.6);
+  }
+  textarea:focus { border-color: var(--ink); }
+
+  /* Terms list */
+  ol.terms {
+    list-style: none;
+    counter-reset: term;
+    padding: 0;
+    margin: 0;
+  }
+  ol.terms li {
+    counter-increment: term;
+    padding: 14px 0 14px 44px;
+    border-bottom: 1px dashed var(--line-soft);
+    font-size: 14.5px;
+    color: var(--ink-soft);
+    position: relative;
+    font-weight: 300;
+  }
+  ol.terms li::before {
+    content: counter(term, decimal-leading-zero);
+    position: absolute;
+    left: 0;
+    top: 14px;
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 16px;
+    color: var(--accent);
+    width: 32px;
+    letter-spacing: 0.05em;
+  }
+  ol.terms li:last-child { border-bottom: none; }
+
+  /* Checkboxes */
+  .checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .checkbox-group label {
+    font-family: 'Noto Serif KR', serif;
+    font-size: 14px;
+    color: var(--ink);
+    text-transform: none;
+    letter-spacing: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+    padding: 4px 0;
+    font-weight: 400;
+    line-height: 1.6;
+  }
+  .checkbox-group input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--ink-mute);
+    border-radius: 2px;
+    margin: 4px 0 0;
+    flex-shrink: 0;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+    background: #fff;
+  }
+  .checkbox-group input[type="checkbox"]:hover { border-color: var(--ink); }
+  .checkbox-group input[type="checkbox"]:checked {
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+  .checkbox-group input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 5px;
+    height: 9px;
+    border: solid #fdfaf2;
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
+  .opt-tag {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 12px;
+    color: var(--accent);
+    margin-right: 4px;
+  }
+
+  /* Signature */
+  .signature-block { margin-top: 16px; }
+  .sign-row {
+    display: grid;
+    grid-template-columns: 1fr 1.6fr;
+    gap: 24px;
+    margin-top: 20px;
+    align-items: end;
+  }
+  .sign-box {
+    border: 1px solid var(--line);
+    height: 96px;
+    background:
+      repeating-linear-gradient(0deg, transparent 0 22px, var(--line-soft) 22px 23px);
+    border-radius: 1px;
+    position: relative;
+  }
+  .sign-box::after {
+    content: 'Signature';
+    position: absolute;
+    bottom: -18px;
+    right: 0;
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 11px;
+    color: var(--ink-mute);
+    letter-spacing: 0.1em;
+  }
+
+  /* Actions */
+  .actions {
+    margin-top: 56px;
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+  }
+  button {
+    padding: 13px 32px;
+    font-size: 13px;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    border-radius: 1px;
+  }
+  button.primary {
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: #fdfaf2;
+  }
+  button.primary:hover {
+    background: #000;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px -6px rgba(0,0,0,0.3);
+  }
+  button.secondary {
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--line);
+  }
+  button.secondary:hover {
+    border-color: var(--ink);
+    background: rgba(0,0,0,0.02);
+  }
+
+  /* Footer note */
+  .note {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--ink-mute);
+    margin-top: 40px;
+    text-align: center;
+    letter-spacing: 0.03em;
+  }
+  .note::before,
+  .note::after { content: '— '; }
+  .note::after { content: ' —'; }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    body { padding: 24px 12px 48px; }
+    .container { padding: 48px 28px 40px; }
+    .container::before { inset: 8px; }
+    .field-row, .sign-row { grid-template-columns: 1fr; gap: 16px; }
+    h1 { font-size: 22px; }
+    .actions { flex-direction: column-reverse; }
+    button { width: 100%; }
+  }
+
+  /* Print */
+  @media print {
+    body { background: #fff; padding: 0; }
+    .container {
+      box-shadow: none;
+      padding: 32px;
+      max-width: 100%;
+    }
+    .actions, .crest { display: none; }
+    .container::before { border-color: #ccc; }
+  }
+</style>
+</head>
+<body>
+  <form class="container" onsubmit="event.preventDefault(); alert('동의서가 제출되었습니다.');">
+    <header>
+      <div class="crest">A°</div>
+      <h1>AI-free 공간 상호 이용 동의서</h1>
+      <div class="subtitle">A Mutual Agreement for an AI-free Space</div>
+      <div class="divider"><span>EST · MMXXVI</span></div>
+    </header>
+
+    <div class="intro">
+      본 동의서는 참여자 모두가 생성형 AI 도구의 사용을 자발적으로 중단하고,<br>
+      온전한 <em>인간 중심의 사고·대화·창작</em> 환경을 함께 보호하기 위해 작성됩니다.
+    </div>
+
+    <section>
+      <h2><span class="num">I.</span> 기본 정보</h2>
+      <div class="field-row">
+        <div class="field">
+          <label for="space-name">공간 명칭</label>
+          <input type="text" id="space-name" placeholder="Salon BLANK">
+        </div>
+        <div class="field">
+          <label for="space-date">이용 일자</label>
+          <input type="date" id="space-date">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="space-location">장소 / 주소</label>
+          <input type="text" id="space-location" placeholder="Seoul, Republic of Korea">
+        </div>
+        <div class="field">
+          <label for="space-duration">이용 시간</label>
+          <input type="text" id="space-duration" placeholder="14:00 – 17:00">
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="num">II.</span> 동의 내용</h2>
+      <ol class="terms">
+        <li>본인은 본 공간에 머무는 동안 생성형 AI(ChatGPT, Claude, Gemini, Copilot 등) 도구를 사용하지 않습니다.</li>
+        <li>본인은 AI가 생성한 텍스트·이미지·음성 등을 새로 출력하거나 공유하지 않습니다.</li>
+        <li>본인은 노트, 펜, 책, 자신의 기억과 손글씨 등 비-AI 도구를 우선적으로 사용합니다.</li>
+        <li>본인은 본 공간에서 이루어지는 대화·작업이 인간 간의 직접적인 교류임을 존중합니다.</li>
+        <li>본인은 다른 참여자가 위 약속을 지킬 수 있도록 서로의 환경을 함께 보호합니다.</li>
+        <li>긴급 상황이나 명백한 예외가 필요한 경우, 공간 운영자와 사전 합의한 범위 내에서만 사용합니다.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2><span class="num">III.</span> 동의 확인</h2>
+      <div class="checkbox-group">
+        <label>
+          <input type="checkbox" required>
+          <span>본인은 위 동의 내용을 충분히 읽고 이해하였으며, 본 공간에 머무는 동안 이를 자발적으로 준수하겠습니다.</span>
+        </label>
+        <label>
+          <input type="checkbox">
+          <span>본인은 본 동의서에 서명함으로써 다른 참여자의 AI-free 경험을 존중할 것에 동의합니다.</span>
+        </label>
+        <label>
+          <input type="checkbox">
+          <span><span class="opt-tag">optional</span>본인의 이름과 참여 사실이 공간 내 기록물에 익명 또는 실명으로 남는 것에 동의합니다.</span>
+        </label>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="num">IV.</span> 의견 / 비고</h2>
+      <textarea placeholder="공간 운영자에게 전하고 싶은 말, 예외 요청, 기대 등을 자유롭게 적어주세요."></textarea>
+    </section>
+
+    <section class="signature-block">
+      <h2><span class="num">V.</span> 참여자 정보 및 서명</h2>
+      <div class="field-row">
+        <div class="field">
+          <label for="name">성명</label>
+          <input type="text" id="name" required>
+        </div>
+        <div class="field">
+          <label for="email">연락처 (이메일)</label>
+          <input type="email" id="email" placeholder="optional">
+        </div>
+      </div>
+      <div class="sign-row">
+        <div class="field">
+          <label for="sign-date">서명 일자</label>
+          <input type="date" id="sign-date" required>
+        </div>
+        <div class="field">
+          <label>친필 서명</label>
+          <div class="sign-box"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button type="button" class="secondary" onclick="window.print()">인쇄 · PDF</button>
+      <button type="submit" class="primary">동의 및 제출</button>
+    </div>
+
+    <div class="note">본 동의서는 참여자 간의 자발적 약속이며, 법적 구속력은 갖지 않습니다</div>
+  </form>
+</body>
+</html>
