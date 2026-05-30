@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Blank — AR Glasses · 2040</title>
+<title>AR Glasses · 2040</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
 <link rel="stylesheet" href="style.css" />
 </head>
@@ -495,7 +495,7 @@ function StatusBar() {
   return (
     <div className="glass status-bar">
       <span className="dot" />
-      <span className="label" style={{ color: "var(--ink-1)" }}>블랭크 · v4.2</span>
+      <span className="label" style={{ color: "var(--ink-1)" }}>v4.2</span>
       <span style={{ width: 1, height: 12, background: "var(--hair)" }} />
       <span className="mono" style={{ fontSize: 14, color: "var(--ink-1)", letterSpacing: "-0.03em" }}>
         세션-D14·22 · 데이트
@@ -511,7 +511,7 @@ function BlankBar() {
   return (
     <div className="glass blank-mark">
       <span className="blank-pulse" />
-      <span className="label" style={{ color: "var(--ink-1)" }}>블랭크 · 상호 동의</span>
+      <span className="label" style={{ color: "var(--ink-1)" }}>상호 동의</span>
       <span style={{ width: 1, height: 12, background: "var(--hair)" }} />
       <span className="mono" style={{ fontSize: 14, color: "var(--ink-1)", letterSpacing: "0.16em" }}>
         봉인 14:22 · 종료 14:52
@@ -815,6 +815,54 @@ function Wave({ count = 40, warn = false, intensity = 0 }) {
   );
 }
 
+function ExpandablePanel({ wrapStyle, children }) {
+  const [expanded, setExpanded] = useState(false);
+  const wrapRef = useRef(null);
+  const lastTapRef = useRef(0);
+  useEffect(() => {
+    const onTap = (e) => {
+      const el = wrapRef.current;
+      if (!el) return;
+      const { x, y } = e.detail;
+      const r = el.getBoundingClientRect();
+      if (x < r.left || x > r.right || y < r.top || y > r.bottom) return;
+      const now = Date.now();
+      if (now - lastTapRef.current < 600) { setExpanded(prev => !prev); lastTapRef.current = 0; }
+      else { lastTapRef.current = now; }
+    };
+    window.addEventListener('handtap', onTap);
+    return () => window.removeEventListener('handtap', onTap);
+  }, []);
+  return (
+    <div ref={wrapRef}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+      style={{ position: 'absolute', zIndex: 10, transform: expanded ? 'scale(1.05)' : 'scale(1)', transition: 'transform 380ms cubic-bezier(0.2,0.8,0.2,1)', ...wrapStyle }}>
+      {typeof children === 'function' ? children(expanded) : children}
+    </div>
+  );
+}
+
+function PanelExtra({ expanded, rows }) {
+  return (
+    <div style={{
+      overflow: 'hidden',
+      maxHeight: expanded ? `${rows.length * 26 + 22}px` : 0,
+      opacity: expanded ? 1 : 0,
+      transition: 'max-height 380ms cubic-bezier(0.2,0.8,0.2,1), opacity 260ms ease 80ms',
+    }}>
+      <div style={{ borderTop: '1px solid var(--hair)', marginTop: 12, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {rows.map(([label, value, color]) => (
+          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="label" style={{ color: 'var(--ink-1)' }}>{label}</span>
+            <span className="mono" style={{ fontSize: 13, color: color || 'var(--cyan)', letterSpacing: '-0.02em' }}>{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function HeartPanel({ exiting }) {
   const { intensity, phase, t } = useTimeline();
   const jitter = Math.sin(t * 5.2) * 1.5;
@@ -824,98 +872,72 @@ function HeartPanel({ exiting }) {
   const isSpike = phase === 'spike';
   const isRising = phase !== 'calm';
   return (
-    <div className={`glass panel panel-pos ${exiting ? "fade-out" : ""}`}
-      style={{ left: "12%", top: "22%", width: 340, height: 280 }}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">심박 · 실시간</span>
-        <span className={`chip ${isRising ? 'coral' : 'cyan'}`} style={{ transition: 'all 300ms ease' }}>O₂</span>
-      </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-        <span className="value-lg" style={{ color: isSpike ? "var(--coral)" : "var(--ink-1)", transition: 'color 400ms ease' }}>{bpm}</span>
-        <span className="label" style={{ color: "var(--ink-1)" }}>BPM</span>
-        <span className="label" style={{ marginLeft: "auto", color: isRising ? "var(--coral)" : "var(--cyan)", transition: 'color 400ms ease' }}>기준 대비 +{delta}</span>
-      </div>
-      <ECG bpm={bpm} intensity={intensity} warn={isSpike} />
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10 }}>
-        <span className="label">심박변이 {hrv}ms</span>
-        <span className="label">산소포화도 98%</span>
-      </div>
-    </div>
+    <ExpandablePanel wrapStyle={{ left: '12%', top: '22%' }}>
+      {(expanded) => (
+        <div className={`glass panel ${exiting ? "fade-out" : "fade-in"}`} style={{ width: 340 }}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">심박 · 실시간</span>
+            <span className={`chip ${isRising ? 'coral' : 'cyan'}`} style={{ transition: 'all 300ms ease' }}>O₂</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+            <span className="value-lg" style={{ color: isSpike ? "var(--coral)" : "var(--ink-1)", transition: 'color 400ms ease' }}>{bpm}</span>
+            <span className="label" style={{ color: "var(--ink-1)" }}>BPM</span>
+            <span className="label" style={{ marginLeft: "auto", color: isRising ? "var(--coral)" : "var(--cyan)", transition: 'color 400ms ease' }}>기준 대비 +{delta}</span>
+          </div>
+          <ECG bpm={bpm} intensity={intensity} warn={isSpike} />
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10 }}>
+            <span className="label">심박변이 {hrv}ms</span>
+            <span className="label">산소포화도 98%</span>
+          </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['자율신경 균형', '양호', 'var(--mint)'],
+            ['최근 추세', `↑ ${delta}bpm`, isRising ? 'var(--coral)' : 'var(--cyan)'],
+          ]} />
+        </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
 function VoicePanel({ exiting }) {
   const { intensity, phase } = useTimeline();
-  const [expanded, setExpanded] = useState(false);
-  const [scale, setScale] = useState(1);
-  const wrapRef = useRef(null);
-  const lastTapRef = useRef(0);
-
-  useEffect(() => {
-    const onTap = (e) => {
-      const el = wrapRef.current;
-      if (!el) return;
-      const { x, y } = e.detail;
-      const r = el.getBoundingClientRect();
-      const inside = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-      if (!inside) return;
-      const now = Date.now();
-      if (now - lastTapRef.current < 600) {
-        setExpanded(prev => !prev);
-        lastTapRef.current = 0;
-      } else {
-        lastTapRef.current = now;
-      }
-    };
-    window.addEventListener('handtap', onTap);
-    return () => window.removeEventListener('handtap', onTap);
-  }, []);
-
-  useEffect(() => {
-    let raf;
-    const update = () => {
-      const target = expanded ? 1.3 : 1;
-      setScale(prev => {
-        const diff = target - prev;
-        return Math.abs(diff) < 0.002 ? target : prev + diff * 0.12;
-      });
-      raf = requestAnimationFrame(update);
-    };
-    raf = requestAnimationFrame(update);
-    return () => cancelAnimationFrame(raf);
-  }, [expanded]);
   return (
-    <div ref={wrapRef} style={{ position: "absolute", right: "12%", top: "22%", zIndex: 10, transform: `scale(${scale.toFixed(3)})`, transformOrigin: "top right" }}>
-    <div className={`glass panel ${exiting ? "fade-out" : "fade-in"}`}
-      style={{ width: 340, height: 280 }}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">음성 스트레스</span>
-        <span className={`chip ${phase === 'spike' ? 'coral' : 'cyan'}`} style={{ transition: 'all 300ms ease' }}>v3.4</span>
-      </div>
-      <Wave warn={phase === 'spike'} intensity={intensity} />
-      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span className="label">음정 변화</span>
-            <span className="mono" style={{ fontSize: 12, color: 'var(--ink-1)', letterSpacing: '-0.03em' }}>{Math.round(62 + intensity * 32)}%</span>
+    <ExpandablePanel wrapStyle={{ right: '12%', top: '22%' }}>
+      {(expanded) => (
+        <div className={`glass panel ${exiting ? "fade-out" : "fade-in"}`} style={{ width: 340 }}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">음성 스트레스</span>
+            <span className={`chip ${phase === 'spike' ? 'coral' : 'cyan'}`} style={{ transition: 'all 300ms ease' }}>v3.4</span>
           </div>
-          <div className="meter"><div className={`meter-fill ${intensity > 0.45 ? 'warn' : ''}`} style={{ width: `${Math.round(62 + intensity * 32)}%`, transition: 'width 280ms ease, background 400ms ease' }} /></div>
-        </div>
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span className="label">지터</span>
-            <span className="mono" style={{ fontSize: 12, color: 'var(--coral)', letterSpacing: '-0.03em' }}>{Math.round(78 + intensity * 18)}%</span>
+          <Wave warn={phase === 'spike'} intensity={intensity} />
+          <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span className="label">음정 변화</span>
+                <span className="mono" style={{ fontSize: 12, color: 'var(--ink-1)', letterSpacing: '-0.03em' }}>{Math.round(62 + intensity * 32)}%</span>
+              </div>
+              <div className="meter"><div className={`meter-fill ${intensity > 0.45 ? 'warn' : ''}`} style={{ width: `${Math.round(62 + intensity * 32)}%`, transition: 'width 280ms ease, background 400ms ease' }} /></div>
+            </div>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span className="label">지터</span>
+                <span className="mono" style={{ fontSize: 12, color: 'var(--coral)', letterSpacing: '-0.03em' }}>{Math.round(78 + intensity * 18)}%</span>
+              </div>
+              <div className="meter"><div className="meter-fill warn" style={{ width: `${Math.round(78 + intensity * 18)}%`, transition: 'width 280ms ease' }} /></div>
+            </div>
           </div>
-          <div className="meter"><div className="meter-fill warn" style={{ width: `${Math.round(78 + intensity * 18)}%`, transition: 'width 280ms ease' }} /></div>
+          <div className="label" style={{ marginTop: 10, color: "var(--ink-1)" }}>
+            스트레스 지수 <span style={{ color: "var(--coral)", marginLeft: 6, transition: 'color 300ms ease' }}>{(0.71 + intensity * 0.24).toFixed(2)}</span>
+          </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['기저 대비', `+${Math.round(intensity * 18)}%`, 'var(--coral)'],
+            ['이상 패턴', `${Math.round(intensity * 3)}회 감지`, intensity > 0.3 ? 'var(--coral)' : 'var(--mint)'],
+          ]} />
         </div>
-      </div>
-      <div className="label" style={{ marginTop: 10, color: "var(--ink-1)" }}>
-        스트레스 지수 <span style={{ color: "var(--coral)", marginLeft: 6, transition: 'color 300ms ease' }}>{(0.71 + intensity * 0.24).toFixed(2)}</span>
-      </div>
-    </div>
-    </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
@@ -928,29 +950,36 @@ function FacePanel({ exiting }) {
     { name: "시선 회피", val: 0.34 + intensity * 0.42, warn: true },
   ];
   return (
-    <div className={`glass panel panel-pos ${exiting ? "fade-out" : ""}`}
-      style={{ right: "12%", bottom: "20%", width: 340, height: 280 }}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">미세표정 · 32 AU</span>
-        <span className={`chip ${phase === 'spike' ? 'coral' : 'mint'}`} style={{ transition: 'all 300ms ease' }}>표정-{phase === 'spike' ? 12 : 7}</span>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-        {tags.map((t) => (
-          <div key={t.name}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, gap: 8 }}>
-              <span style={{ fontSize: 14, color: "var(--ink-1)", whiteSpace: "nowrap" }}>{t.name}</span>
-              <span className="mono" style={{ fontSize: 14, color: t.warn ? "var(--coral)" : "var(--mint)", letterSpacing: "-0.03em", transition: 'color 300ms ease' }}>
-                {t.val.toFixed(2)}
-              </span>
-            </div>
-            <div className="meter">
-              <div className={`meter-fill ${t.warn ? "warn" : ""}`} style={{ width: `${Math.min(100, t.val * 100)}%`, transition: 'width 280ms ease' }} />
-            </div>
+    <ExpandablePanel wrapStyle={{ right: '12%', bottom: '20%' }}>
+      {(expanded) => (
+        <div className={`glass panel ${exiting ? "fade-out" : "fade-in"}`} style={{ width: 340 }}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">미세표정 · 32 AU</span>
+            <span className={`chip ${phase === 'spike' ? 'coral' : 'mint'}`} style={{ transition: 'all 300ms ease' }}>표정-{phase === 'spike' ? 12 : 7}</span>
           </div>
-        ))}
-      </div>
-    </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            {tags.map((t) => (
+              <div key={t.name}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, gap: 8 }}>
+                  <span style={{ fontSize: 14, color: "var(--ink-1)", whiteSpace: "nowrap" }}>{t.name}</span>
+                  <span className="mono" style={{ fontSize: 14, color: t.warn ? "var(--coral)" : "var(--mint)", letterSpacing: "-0.03em", transition: 'color 300ms ease' }}>
+                    {t.val.toFixed(2)}
+                  </span>
+                </div>
+                <div className="meter">
+                  <div className={`meter-fill ${t.warn ? "warn" : ""}`} style={{ width: `${Math.min(100, t.val * 100)}%`, transition: 'width 280ms ease' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['주요 감지 AU', 'AU-4, AU-7, AU-17', 'var(--coral)'],
+            ['분석 신뢰도', '92%', 'var(--mint)'],
+          ]} />
+        </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
@@ -966,34 +995,37 @@ function TruthPanel({ exiting }) {
   const visibleSuspects = suspects.filter((s) => t >= s.at);
   const suspectCount = visibleSuspects.length;
   return (
-    <div className={`glass panel panel-pos ${exiting ? "fade-out" : ""}`}
-      style={{ left: "12%", bottom: "20%", width: 340, height: 280 }}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">진실 신뢰도</span>
-        <span className="chip coral">의심 {suspectCount}건</span>
-      </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
-        <span className="value-lg" style={{ color: "var(--coral)", transition: 'color 300ms ease' }}>{truth}</span>
-        <span className="label" style={{ color: "var(--ink-1)" }}>%  · 14분 대화</span>
-      </div>
-      <div className="meter" style={{ height: 6 }}>
-        <div className="meter-fill warn" style={{ width: `${truth}%`, transition: 'width 320ms ease' }} />
-      </div>
-      <div style={{ marginTop: 14 }}>
-        <div className="label" style={{ marginBottom: 6 }}>의심 발언</div>
-        {visibleSuspects.map((s, i) => (
-          <div key={s.at}
-            className="transcript"
-            style={{
-              fontSize: 14, marginTop: i === 0 ? 0 : 6,
-              animation: 'fadeUp 380ms cubic-bezier(0.2,0.8,0.2,1) both',
-            }}>
-            "<span className="t-flag">{s.text}</span>"
+    <ExpandablePanel wrapStyle={{ left: '12%', bottom: '20%' }}>
+      {(expanded) => (
+        <div className={`glass panel ${exiting ? "fade-out" : "fade-in"}`} style={{ width: 340 }}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">진실 신뢰도</span>
+            <span className="chip coral">의심 {suspectCount}건</span>
           </div>
-        ))}
-      </div>
-    </div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
+            <span className="value-lg" style={{ color: "var(--coral)", transition: 'color 300ms ease' }}>{truth}</span>
+            <span className="label" style={{ color: "var(--ink-1)" }}>%  · 14분 대화</span>
+          </div>
+          <div className="meter" style={{ height: 6 }}>
+            <div className="meter-fill warn" style={{ width: `${truth}%`, transition: 'width 320ms ease' }} />
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <div className="label" style={{ marginBottom: 6 }}>의심 발언</div>
+            {visibleSuspects.map((s, i) => (
+              <div key={s.at} className="transcript"
+                style={{ fontSize: 14, marginTop: i === 0 ? 0 : 6, animation: 'fadeUp 380ms cubic-bezier(0.2,0.8,0.2,1) both' }}>
+                "<span className="t-flag">{s.text}</span>"
+              </div>
+            ))}
+          </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['의심 빈도', `분당 ${(suspectCount / 14).toFixed(1)}건`, 'var(--coral)'],
+            ['패턴 유형', '언어 회피형', 'var(--coral)'],
+          ]} />
+        </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
@@ -1209,12 +1241,12 @@ function Ceremony({ phase, onAdvance, onCancel }) {
       <div className="glass glass-strong ceremony-card">
         <i className="ticks"><i></i></i>
 
-        <div className="eyebrow" style={{ color: "var(--cyan)" }}>블랭크 · 동의 프로토콜</div>
+        <div className="eyebrow" style={{ color: "var(--cyan)" }}>동의 프로토콜</div>
         <h1 style={{ fontSize: 30, fontWeight: 300, marginTop: 12, letterSpacing: "-0.02em" }}>
           {phase === "propose" && "분석을 비우시겠습니까?"}
           {phase === "awaiting" && "상대방의 응답을 기다리는 중"}
           {phase === "consent" && "서로의 동의를 봉인합니다"}
-          {phase === "sealed" && "블랭크 합의가 완료되었습니다"}
+          {phase === "sealed" && "합의가 완료되었습니다"}
         </h1>
         <p style={{
           fontSize: 14, color: "var(--ink-1)", marginTop: 14, lineHeight: 1.7,
@@ -1268,7 +1300,7 @@ function Ceremony({ phase, onAdvance, onCancel }) {
           <span>—</span>
           <span style={{ color: phase === "consent" ? "var(--cyan)" : "var(--ink-1)" }}>03 봉인</span>
           <span>—</span>
-          <span style={{ color: phase === "sealed" ? "var(--mint)" : "var(--ink-1)" }}>04 블랭크</span>
+          <span style={{ color: phase === "sealed" ? "var(--mint)" : "var(--ink-1)" }}>04</span>
         </div>
 
         <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 36 }}>
@@ -1288,7 +1320,7 @@ function Ceremony({ phase, onAdvance, onCancel }) {
             </>
           )}
           {phase === "sealed" && (
-            <button className="btn btn-primary" onClick={onAdvance}>블랭크 모드 진입 →</button>
+            <button className="btn btn-primary" onClick={onAdvance}>모드 진입 →</button>
           )}
         </div>
 
@@ -1300,7 +1332,7 @@ function Ceremony({ phase, onAdvance, onCancel }) {
           whiteSpace: "nowrap",
         }}>
           <span>세션-A21·09</span>
-          <span>SHA-3 / 블랭크 / 상호동의</span>
+          <span>SHA-3 / 상호동의</span>
           <span>규정 §14.2</span>
         </div>
       </div>
@@ -1356,14 +1388,22 @@ function RadarPanel() {
     return()=>cancelAnimationFrame(raf);
   },[]);
   return (
-    <div className="glass panel panel-pos" style={{left:'5%',top:'22%',width:240}}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">공간 스캔 · LIDAR</span>
-        <span className="chip mint">5 객체</span>
-      </div>
-      <canvas ref={canvasRef} width={200} height={160} style={{display:'block',margin:'0 auto'}}/>
-    </div>
+    <ExpandablePanel wrapStyle={{ left: '5%', top: '22%' }}>
+      {(expanded) => (
+        <div className="glass panel panel-pos" style={{width:240}}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">공간 스캔 · LIDAR</span>
+            <span className="chip mint">5 객체</span>
+          </div>
+          <canvas ref={canvasRef} width={200} height={160} style={{display:'block',margin:'0 auto'}}/>
+          <PanelExtra expanded={expanded} rows={[
+            ['탐지 범위', '4.8m', 'var(--mint)'],
+            ['마지막 이동', '12초 전', 'var(--ink-1)'],
+          ]} />
+        </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
@@ -1375,28 +1415,36 @@ function AtmospherePanel() {
     {l:'소음', v:'46',  u:'dB', f:.46,c:'var(--coral)'},
   ];
   return (
-    <div className="glass panel panel-pos" style={{right:'5%',top:'22%',width:256,animationDelay:'80ms'}}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">대기 센서 · ENV-4</span>
-        <span className="chip cyan">실내</span>
-      </div>
-      <div style={{display:'flex',flexDirection:'column',gap:12}}>
-        {rows.map(r=>(
-          <div key={r.l}>
-            <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-              <span className="label">{r.l}</span>
-              <span className="mono" style={{fontSize:14,color:r.c}}>{r.v}
-                <span style={{fontSize:14,color:'var(--ink-1)',marginLeft:2,letterSpacing:'-0.03em'}}>{r.u}</span>
-              </span>
-            </div>
-            <div className="meter">
-              <div className="meter-fill" style={{width:`${r.f*100}%`,background:`linear-gradient(90deg,var(--cyan-dim),${r.c})`}}/>
-            </div>
+    <ExpandablePanel wrapStyle={{ right: '5%', top: '22%', '--enter-delay': '80ms' }}>
+      {(expanded) => (
+        <div className="glass panel panel-pos" style={{width:256}}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">대기 센서 · ENV-4</span>
+            <span className="chip cyan">실내</span>
           </div>
-        ))}
-      </div>
-    </div>
+          <div style={{display:'flex',flexDirection:'column',gap:12}}>
+            {rows.map(r=>(
+              <div key={r.l}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                  <span className="label">{r.l}</span>
+                  <span className="mono" style={{fontSize:14,color:r.c}}>{r.v}
+                    <span style={{fontSize:14,color:'var(--ink-1)',marginLeft:2,letterSpacing:'-0.03em'}}>{r.u}</span>
+                  </span>
+                </div>
+                <div className="meter">
+                  <div className="meter-fill" style={{width:`${r.f*100}%`,background:`linear-gradient(90deg,var(--cyan-dim),${r.c})`}}/>
+                </div>
+              </div>
+            ))}
+          </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['환경 위험도', '낮음', 'var(--mint)'],
+            ['최적 대화 조건', '충족', 'var(--cyan)'],
+          ]} />
+        </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
@@ -1409,49 +1457,65 @@ function ObjectsPanel() {
     {n:'화분',d:'3.1m',c:73},
   ];
   return (
-    <div className="glass panel panel-pos" style={{left:'5%',bottom:'22%',width:256,animationDelay:'160ms'}}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">객체 인식 · CV-7</span>
-        <span className="chip mint">정확도↑</span>
-      </div>
-      <div style={{display:'flex',flexDirection:'column',gap:9}}>
-        {objs.map(o=>(
-          <div key={o.n} style={{display:'flex',alignItems:'center',gap:8}}>
-            <div style={{width:4,height:4,borderRadius:'50%',background:'var(--mint)',flexShrink:0}}/>
-            <span style={{flex:1,fontSize:14,color:'var(--ink-1)'}}>{o.n}</span>
-            <span className="mono" style={{fontSize:14,color:'var(--ink-1)',letterSpacing:'-0.03em'}}>{o.d}</span>
-            <span className="mono" style={{fontSize:14,color:'var(--mint)',width:32,textAlign:'right',letterSpacing:'-0.03em'}}>{o.c}%</span>
+    <ExpandablePanel wrapStyle={{ left: '5%', bottom: '22%', '--enter-delay': '160ms' }}>
+      {(expanded) => (
+        <div className="glass panel panel-pos" style={{width:256}}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">객체 인식 · CV-7</span>
+            <span className="chip mint">정확도↑</span>
           </div>
-        ))}
-      </div>
-    </div>
+          <div style={{display:'flex',flexDirection:'column',gap:9}}>
+            {objs.map(o=>(
+              <div key={o.n} style={{display:'flex',alignItems:'center',gap:8}}>
+                <div style={{width:4,height:4,borderRadius:'50%',background:'var(--mint)',flexShrink:0}}/>
+                <span style={{flex:1,fontSize:14,color:'var(--ink-1)'}}>{o.n}</span>
+                <span className="mono" style={{fontSize:14,color:'var(--ink-1)',letterSpacing:'-0.03em'}}>{o.d}</span>
+                <span className="mono" style={{fontSize:14,color:'var(--mint)',width:32,textAlign:'right',letterSpacing:'-0.03em'}}>{o.c}%</span>
+              </div>
+            ))}
+          </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['이동 감지', '없음', 'var(--mint)'],
+            ['새 객체', '0개', 'var(--ink-1)'],
+          ]} />
+        </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
 function SpectrumPanel() {
   const bands=[{l:'UV',v:.12},{l:'VIS',v:.82},{l:'NIR',v:.48},{l:'Wi',v:.91},{l:'BT',v:.67},{l:'5G',v:.39}];
   return (
-    <div className="glass panel panel-pos" style={{right:'5%',bottom:'22%',width:240,animationDelay:'240ms'}}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">전자기 스펙트럼</span>
-        <span className="chip cyan">EM-2</span>
-      </div>
-      <div style={{display:'flex',alignItems:'flex-end',gap:6,height:80,marginTop:8,padding:'0 4px'}}>
-        {bands.map((b,i)=>(
-          <div key={b.l} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
-            <div style={{
-              width:'100%',height:`${b.v*72}px`,
-              background:'linear-gradient(180deg,rgba(100,210,210,.85),rgba(50,130,180,.3))',
-              borderRadius:'3px 3px 0 0',
-              animation:`wave ${1.1+i*.25}s ease-in-out infinite`,
-            }}/>
-            <span className="label">{b.l}</span>
+    <ExpandablePanel wrapStyle={{ right: '5%', bottom: '22%', '--enter-delay': '240ms' }}>
+      {(expanded) => (
+        <div className="glass panel panel-pos" style={{width:240}}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">전자기 스펙트럼</span>
+            <span className="chip cyan">EM-2</span>
           </div>
-        ))}
-      </div>
-    </div>
+          <div style={{display:'flex',alignItems:'flex-end',gap:6,height:80,marginTop:8,padding:'0 4px'}}>
+            {bands.map((b,i)=>(
+              <div key={b.l} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+                <div style={{
+                  width:'100%',height:`${b.v*72}px`,
+                  background:'linear-gradient(180deg,rgba(100,210,210,.85),rgba(50,130,180,.3))',
+                  borderRadius:'3px 3px 0 0',
+                  animation:`wave ${1.1+i*.25}s ease-in-out infinite`,
+                }}/>
+                <span className="label">{b.l}</span>
+              </div>
+            ))}
+          </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['이상 신호', '없음', 'var(--mint)'],
+            ['전파 간섭', '미감지', 'var(--ink-1)'],
+          ]} />
+        </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
@@ -1539,12 +1603,14 @@ function NetworkPanel() {
   const onPointerUp = () => { dragRef.current = null; };
 
   return (
-    <div className="glass panel panel-pos" style={{left:'5%',top:'22%',width:256}}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">신뢰 네트워크</span>
-        <span className="chip cyan">12 공통</span>
-      </div>
+    <ExpandablePanel wrapStyle={{ left: '5%', top: '22%' }}>
+      {(expanded) => (
+        <div className="glass panel panel-pos" style={{width:256}}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">신뢰 네트워크</span>
+            <span className="chip cyan">12 공통</span>
+          </div>
       <svg width={220} height={200} style={{display:'block',margin:'0 auto',overflow:'visible'}}
         onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp}>
         <defs>
@@ -1594,7 +1660,13 @@ function NetworkPanel() {
           </g>
         ))}
       </svg>
-    </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['네트워크 밀도', '0.48', 'var(--cyan)'],
+            ['핵심 연결자', '이준혁', 'var(--ink-1)'],
+          ]} />
+        </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
@@ -1607,21 +1679,29 @@ function ProfileExpandedPanel() {
     {l:'언어',v:'한국어  영어'},
   ];
   return (
-    <div className="glass panel panel-pos" style={{right:'5%',top:'22%',width:256,animationDelay:'80ms'}}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">신원 · 공개 레이어</span>
-        <span className="chip mint">인증됨</span>
-      </div>
-      <div style={{display:'flex',flexDirection:'column',gap:10}}>
-        {rows.map(r=>(
-          <div key={r.l} style={{display:'flex',gap:12,alignItems:'baseline'}}>
-            <span className="label" style={{width:58,flexShrink:0,color:'var(--ink-1)'}}>{r.l}</span>
-            <span style={{fontSize:14,color:'var(--ink-1)',lineHeight:1.5}}>{r.v}</span>
+    <ExpandablePanel wrapStyle={{ right: '5%', top: '22%', '--enter-delay': '80ms' }}>
+      {(expanded) => (
+        <div className="glass panel panel-pos" style={{width:256}}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">신원 · 공개 레이어</span>
+            <span className="chip mint">인증됨</span>
           </div>
-        ))}
-      </div>
-    </div>
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            {rows.map(r=>(
+              <div key={r.l} style={{display:'flex',gap:12,alignItems:'baseline'}}>
+                <span className="label" style={{width:58,flexShrink:0,color:'var(--ink-1)'}}>{r.l}</span>
+                <span style={{fontSize:14,color:'var(--ink-1)',lineHeight:1.5}}>{r.v}</span>
+              </div>
+            ))}
+          </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['마지막 업데이트', '2분 전', 'var(--ink-1)'],
+            ['공개 정보 레벨', '3 / 5', 'var(--cyan)'],
+          ]} />
+        </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
@@ -1633,23 +1713,31 @@ function InteractionLogPanel() {
     {t:'오늘 14:08',e:'데이트 · 진행 중',now:true},
   ];
   return (
-    <div className="glass panel panel-pos" style={{right:'5%',bottom:'22%',width:280,animationDelay:'160ms'}}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">상호작용 로그</span>
-        <span className="chip coral">4회</span>
-      </div>
-      <div style={{display:'flex',flexDirection:'column',gap:10,paddingLeft:14,borderLeft:'1px solid rgba(15,25,40,.14)'}}>
-        {logs.map((l,i)=>(
-          <div key={i} style={{position:'relative'}}>
-            <div style={{position:'absolute',left:-18,top:5,width:5,height:5,borderRadius:'50%',
-              background:l.now?'var(--cyan)':'rgba(15,25,40,.30)'}}/>
-            <div className="label" style={{color:l.now?'var(--cyan)':'var(--ink-1)'}}>{l.t}</div>
-            <div style={{fontSize:14,color:'var(--ink-1)',marginTop:2}}>{l.e}</div>
+    <ExpandablePanel wrapStyle={{ right: '5%', bottom: '22%', '--enter-delay': '160ms' }}>
+      {(expanded) => (
+        <div className="glass panel panel-pos" style={{width:280}}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">상호작용 로그</span>
+            <span className="chip coral">4회</span>
           </div>
-        ))}
-      </div>
-    </div>
+          <div style={{display:'flex',flexDirection:'column',gap:10,paddingLeft:14,borderLeft:'1px solid rgba(15,25,40,.14)'}}>
+            {logs.map((l,i)=>(
+              <div key={i} style={{position:'relative'}}>
+                <div style={{position:'absolute',left:-18,top:5,width:5,height:5,borderRadius:'50%',
+                  background:l.now?'var(--cyan)':'rgba(15,25,40,.30)'}}/>
+                <div className="label" style={{color:l.now?'var(--cyan)':'var(--ink-1)'}}>{l.t}</div>
+                <div style={{fontSize:14,color:'var(--ink-1)',marginTop:2}}>{l.e}</div>
+              </div>
+            ))}
+          </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['평균 주기', '138일', 'var(--ink-1)'],
+            ['감정 추이', '중립→갈등', 'var(--coral)'],
+          ]} />
+        </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
@@ -1660,27 +1748,35 @@ function SentimentPanel() {
   const sY=v=>(1-v)*(H-pad*2)+pad;
   const d=pts.map((v,i)=>`${i===0?'M':'L'}${sX(i).toFixed(1)},${sY(v).toFixed(1)}`).join(' ');
   return (
-    <div className="glass panel panel-pos" style={{left:'5%',bottom:'22%',width:256,animationDelay:'240ms'}}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">감정 곡선 · 14분</span>
-        <span className="chip mint">중립→긴장</span>
-      </div>
-      <svg width={224} height={56} style={{display:'block'}}>
-        <defs>
-          <linearGradient id="sgrd" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgba(100,200,220,.22)"/>
-            <stop offset="100%" stopColor="rgba(100,200,220,0)"/>
-          </linearGradient>
-        </defs>
-        <path d={`${d} L${sX(pts.length-1)},${H} L${sX(0)},${H} Z`} fill="url(#sgrd)"/>
-        <path d={d} fill="none" stroke="rgba(100,200,220,.75)" strokeWidth="1.4"/>
-      </svg>
-      <div style={{display:'flex',justifyContent:'space-between',marginTop:6}}>
-        <span className="label" style={{color:'var(--ink-1)'}}>시작: 안정</span>
-        <span className="label" style={{color:'var(--coral)'}}>현재: 긴장</span>
-      </div>
-    </div>
+    <ExpandablePanel wrapStyle={{ left: '5%', bottom: '22%', '--enter-delay': '240ms' }}>
+      {(expanded) => (
+        <div className="glass panel panel-pos" style={{width:256}}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">감정 곡선 · 14분</span>
+            <span className="chip mint">중립→긴장</span>
+          </div>
+          <svg width={224} height={56} style={{display:'block'}}>
+            <defs>
+              <linearGradient id="sgrd" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="rgba(100,200,220,.22)"/>
+                <stop offset="100%" stopColor="rgba(100,200,220,0)"/>
+              </linearGradient>
+            </defs>
+            <path d={`${d} L${sX(pts.length-1)},${H} L${sX(0)},${H} Z`} fill="url(#sgrd)"/>
+            <path d={d} fill="none" stroke="rgba(100,200,220,.75)" strokeWidth="1.4"/>
+          </svg>
+          <div style={{display:'flex',justifyContent:'space-between',marginTop:6}}>
+            <span className="label" style={{color:'var(--ink-1)'}}>시작: 안정</span>
+            <span className="label" style={{color:'var(--coral)'}}>현재: 긴장</span>
+          </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['변화 속도', '빠름', 'var(--coral)'],
+            ['현재 감정 벡터', '불안 우세', 'var(--coral)'],
+          ]} />
+        </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
@@ -1689,44 +1785,52 @@ function SentimentPanel() {
 function CogLoadPanel() {
   const score=73, R=50, circ=2*Math.PI*R;
   return (
-    <div className="glass panel panel-pos" style={{left:'5%',top:'22%',width:260}}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">인지 부하 · EEG-proxy</span>
-        <span className="chip coral">높음</span>
-      </div>
-      <div style={{display:'flex',alignItems:'center',gap:20,marginTop:4}}>
-        <svg width={114} height={114} style={{flexShrink:0}}>
-          <circle cx={57} cy={57} r={R} fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="8"/>
-          <circle cx={57} cy={57} r={R} fill="none"
-            stroke="var(--coral)" strokeWidth="8"
-            strokeDasharray={circ} strokeDashoffset={circ*(1-score/100)}
-            strokeLinecap="round" transform="rotate(-90 57 57)"
-            style={{filter:'drop-shadow(0 0 6px var(--coral))'}}/>
-          <text x={57} y={53} textAnchor="middle" fill="rgba(220,175,155,.9)"
-            fontSize={26} fontWeight="300" fontFamily="var(--font-sans)">{score}</text>
-          <text x={57} y={68} textAnchor="middle" fill="rgba(180,150,140,.45)"
-            fontSize={9} fontFamily="var(--font-sans)">COGNITIVE LOAD</text>
-        </svg>
-        <div style={{display:'flex',flexDirection:'column',gap:9}}>
-          {[
-            {l:'집중도',  v:'41%',w:'41%',warn:false},
-            {l:'작업 기억',v:'68%',w:'68%',warn:false},
-            {l:'인지 피로',v:'73%',w:'73%',warn:true},
-          ].map(r=>(
-            <div key={r.l}>
-              <div style={{display:'flex',justifyContent:'space-between',marginBottom:3,gap:10}}>
-                <span className="label">{r.l}</span>
-                <span className="mono" style={{fontSize:14,color:r.warn?'var(--coral)':'var(--cyan)'}}>{r.v}</span>
-              </div>
-              <div className="meter">
-                <div className={`meter-fill${r.warn?' warn':''}`} style={{width:r.w}}/>
-              </div>
+    <ExpandablePanel wrapStyle={{ left: '5%', top: '22%' }}>
+      {(expanded) => (
+        <div className="glass panel panel-pos" style={{width:260}}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">인지 부하 · EEG-proxy</span>
+            <span className="chip coral">높음</span>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:20,marginTop:4}}>
+            <svg width={114} height={114} style={{flexShrink:0}}>
+              <circle cx={57} cy={57} r={R} fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="8"/>
+              <circle cx={57} cy={57} r={R} fill="none"
+                stroke="var(--coral)" strokeWidth="8"
+                strokeDasharray={circ} strokeDashoffset={circ*(1-score/100)}
+                strokeLinecap="round" transform="rotate(-90 57 57)"
+                style={{filter:'drop-shadow(0 0 6px var(--coral))'}}/>
+              <text x={57} y={53} textAnchor="middle" fill="rgba(220,175,155,.9)"
+                fontSize={26} fontWeight="300" fontFamily="var(--font-sans)">{score}</text>
+              <text x={57} y={68} textAnchor="middle" fill="rgba(180,150,140,.45)"
+                fontSize={9} fontFamily="var(--font-sans)">COGNITIVE LOAD</text>
+            </svg>
+            <div style={{display:'flex',flexDirection:'column',gap:9}}>
+              {[
+                {l:'집중도',  v:'41%',w:'41%',warn:false},
+                {l:'작업 기억',v:'68%',w:'68%',warn:false},
+                {l:'인지 피로',v:'73%',w:'73%',warn:true},
+              ].map(r=>(
+                <div key={r.l}>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:3,gap:10}}>
+                    <span className="label">{r.l}</span>
+                    <span className="mono" style={{fontSize:14,color:r.warn?'var(--coral)':'var(--cyan)'}}>{r.v}</span>
+                  </div>
+                  <div className="meter">
+                    <div className={`meter-fill${r.warn?' warn':''}`} style={{width:r.w}}/>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['권장 휴식', '15분 후', 'var(--mint)'],
+            ['집중 잔여', '약 8분', 'var(--cyan)'],
+          ]} />
         </div>
-      </div>
-    </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
@@ -1756,22 +1860,30 @@ function AttentionPanel() {
     return()=>cancelAnimationFrame(raf);
   },[]);
   return (
-    <div className="glass panel panel-pos" style={{right:'5%',top:'22%',width:268,animationDelay:'80ms'}}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">주의 집중 · 실시간</span>
-        <span className="chip cyan">변동</span>
-      </div>
-      <canvas ref={canvasRef} width={240} height={56} style={{display:'block',margin:'0 auto'}}/>
-      <div style={{display:'flex',justifyContent:'space-between',marginTop:10}}>
-        {[['최고','82%'],['평균','61%'],['현재','47%']].map(([l,v])=>(
-          <div key={l} style={{textAlign:'center'}}>
-            <div className="label" style={{color:'var(--ink-1)'}}>{l}</div>
-            <div className="mono" style={{fontSize:14,color:'var(--ink-1)',marginTop:2}}>{v}</div>
+    <ExpandablePanel wrapStyle={{ right: '5%', top: '22%', '--enter-delay': '80ms' }}>
+      {(expanded) => (
+        <div className="glass panel panel-pos" style={{width:268}}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">주의 집중 · 실시간</span>
+            <span className="chip cyan">변동</span>
           </div>
-        ))}
-      </div>
-    </div>
+          <canvas ref={canvasRef} width={240} height={56} style={{display:'block',margin:'0 auto'}}/>
+          <div style={{display:'flex',justifyContent:'space-between',marginTop:10}}>
+            {[['최고','82%'],['평균','61%'],['현재','47%']].map(([l,v])=>(
+              <div key={l} style={{textAlign:'center'}}>
+                <div className="label" style={{color:'var(--ink-1)'}}>{l}</div>
+                <div className="mono" style={{fontSize:14,color:'var(--ink-1)',marginTop:2}}>{v}</div>
+              </div>
+            ))}
+          </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['주의 분산', '분당 2.4회', 'var(--coral)'],
+            ['최적 집중 구간', '22초 전', 'var(--cyan)'],
+          ]} />
+        </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
@@ -1785,39 +1897,47 @@ function BreathPanel() {
   const scale=.7+Math.sin(phase)*.3;
   const isIn=Math.sin(phase)>0;
   return (
-    <div className="glass panel panel-pos" style={{left:'5%',bottom:'22%',width:240,animationDelay:'160ms'}}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">호흡 리듬 · 14/분</span>
-        <span className="chip mint">정상</span>
-      </div>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:24,padding:'8px 0'}}>
-        <div style={{position:'relative',width:72,height:72,display:'flex',alignItems:'center',justifyContent:'center'}}>
-          <div style={{position:'absolute',inset:0,borderRadius:'50%',border:'1px solid rgba(130,215,185,.20)'}}/>
-          <div style={{
-            width:`${40*scale}px`,height:`${40*scale}px`,borderRadius:'50%',
-            background:'radial-gradient(circle,rgba(130,215,185,.35),rgba(130,215,185,.06))',
-            border:'1px solid rgba(130,215,185,.45)',
-            boxShadow:'0 0 16px rgba(130,215,185,.18)',
-            transition:'width .08s,height .08s',
-          }}/>
+    <ExpandablePanel wrapStyle={{ left: '5%', bottom: '22%', '--enter-delay': '160ms' }}>
+      {(expanded) => (
+        <div className="glass panel panel-pos" style={{width:240}}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">호흡 리듬 · 14/분</span>
+            <span className="chip mint">정상</span>
+          </div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:24,padding:'8px 0'}}>
+            <div style={{position:'relative',width:72,height:72,display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <div style={{position:'absolute',inset:0,borderRadius:'50%',border:'1px solid rgba(130,215,185,.20)'}}/>
+              <div style={{
+                width:`${40*scale}px`,height:`${40*scale}px`,borderRadius:'50%',
+                background:'radial-gradient(circle,rgba(130,215,185,.35),rgba(130,215,185,.06))',
+                border:'1px solid rgba(130,215,185,.45)',
+                boxShadow:'0 0 16px rgba(130,215,185,.18)',
+                transition:'width .08s,height .08s',
+              }}/>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              <div>
+                <div className="label" style={{color:'var(--ink-1)'}}>상태</div>
+                <div className="mono" style={{fontSize:14,color:'var(--mint)',marginTop:2}}>{isIn?'들숨':'날숨'}</div>
+              </div>
+              <div>
+                <div className="label" style={{color:'var(--ink-1)'}}>SpO₂</div>
+                <div className="mono" style={{fontSize:14,color:'var(--cyan)',marginTop:2}}>98%</div>
+              </div>
+              <div>
+                <div className="label" style={{color:'var(--ink-1)'}}>리듬</div>
+                <div className="mono" style={{fontSize:14,color:'var(--ink-1)',marginTop:2}}>규칙적</div>
+              </div>
+            </div>
+          </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['다음 호흡 주기', '3.1초 후', 'var(--mint)'],
+            ['이상 감지', '없음', 'var(--cyan)'],
+          ]} />
         </div>
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          <div>
-            <div className="label" style={{color:'var(--ink-1)'}}>상태</div>
-            <div className="mono" style={{fontSize:14,color:'var(--mint)',marginTop:2}}>{isIn?'들숨':'날숨'}</div>
-          </div>
-          <div>
-            <div className="label" style={{color:'var(--ink-1)'}}>SpO₂</div>
-            <div className="mono" style={{fontSize:14,color:'var(--cyan)',marginTop:2}}>98%</div>
-          </div>
-          <div>
-            <div className="label" style={{color:'var(--ink-1)'}}>리듬</div>
-            <div className="mono" style={{fontSize:14,color:'var(--ink-1)',marginTop:2}}>규칙적</div>
-          </div>
-        </div>
-      </div>
-    </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
@@ -1828,21 +1948,29 @@ function RecommendPanel() {
     {icon:'◉',text:'대화 속도 15% 낮추면 진실도 상승',c:'var(--cyan)'},
   ];
   return (
-    <div className="glass panel panel-pos" style={{right:'5%',bottom:'22%',width:296,animationDelay:'240ms'}}>
-      <i className="ticks"><i></i></i>
-      <div className="panel-head">
-        <span className="label">AI 행동 권장</span>
-        <span className="chip cyan">3건</span>
-      </div>
-      <div style={{display:'flex',flexDirection:'column',gap:12}}>
-        {actions.map((a,i)=>(
-          <div key={i} style={{display:'flex',gap:10,alignItems:'flex-start'}}>
-            <span style={{color:a.c,fontSize:14,marginTop:1,flexShrink:0}}>{a.icon}</span>
-            <span style={{fontSize:14,color:'var(--ink-1)',lineHeight:1.6}}>{a.text}</span>
+    <ExpandablePanel wrapStyle={{ right: '5%', bottom: '22%', '--enter-delay': '240ms' }}>
+      {(expanded) => (
+        <div className="glass panel panel-pos" style={{width:296}}>
+          <i className="ticks"><i></i></i>
+          <div className="panel-head">
+            <span className="label">AI 행동 권장</span>
+            <span className="chip cyan">3건</span>
           </div>
-        ))}
-      </div>
-    </div>
+          <div style={{display:'flex',flexDirection:'column',gap:12}}>
+            {actions.map((a,i)=>(
+              <div key={i} style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+                <span style={{color:a.c,fontSize:14,marginTop:1,flexShrink:0}}>{a.icon}</span>
+                <span style={{fontSize:14,color:'var(--ink-1)',lineHeight:1.6}}>{a.text}</span>
+              </div>
+            ))}
+          </div>
+          <PanelExtra expanded={expanded} rows={[
+            ['AI 판단 신뢰도', '87%', 'var(--cyan)'],
+            ['마지막 업데이트', '4초 전', 'var(--ink-1)'],
+          ]} />
+        </div>
+      )}
+    </ExpandablePanel>
   );
 }
 
@@ -1953,7 +2081,7 @@ function App() {
             fontFamily: "var(--font-sans)",
             fontSize: 14, letterSpacing: "-0.03em", textTransform: "uppercase",
             color: "rgba(180,220,255,0.35)", marginBottom: 16,
-          }}>BLANK · AR GLASSES · 2040</div>
+          }}>AR GLASSES · 2040</div>
           <div style={{
             fontSize: 32, fontWeight: 300, letterSpacing: "-0.02em",
             color: "rgba(180,220,255,0.75)",
@@ -2070,7 +2198,7 @@ function App() {
       {showTutorial && (
         <div className="ceremony-bg">
           <div className="glass glass-strong ceremony-card" style={{ maxWidth: 520 }}>
-            <div className="eyebrow" style={{ color: "var(--cyan)" }}>블랭크 · 튜토리얼</div>
+            <div className="eyebrow" style={{ color: "var(--cyan)" }}>튜토리얼</div>
             <h1 style={{ fontSize: 26, fontWeight: 300, marginTop: 12, letterSpacing: "-0.02em" }}>
               시뮬레이션 안내
             </h1>

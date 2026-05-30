@@ -395,7 +395,7 @@ body {
   100% { transform: translateY(100%); }
 }
 
-.fade-in { animation: fadeUp 600ms ease both; }
+.fade-in { animation: fadeUp 600ms ease both; animation-delay: var(--enter-delay, 0ms); }
 .fade-out { animation: fadeDown 400ms ease both; }
 .blink { animation: blink 1.6s ease-in-out infinite; }
 .drift { animation: drift 7s ease-in-out infinite; }
